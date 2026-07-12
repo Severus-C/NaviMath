@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "total": 4,
+  "correct": 2,
+  "wrong": 2,
+  "diagnostic_coverage": 1.0,
+  "by_primary_cause": {
+    "verifier_misjudgment": 2
+  },
+  "by_root_cause": {
+    "wrong_consensus": 2,
+    "verifier_misjudgment": 2
+  },
+  "labels_zh": {
+    "format_error": "格式错误",
+    "routing_error": "路由错误",
+    "wrong_consensus": "多候选一致但都错",
+    "verifier_misjudgment": "verifier 误判",
+    "final_judge_wrong_selection": "final judge 选错",
+    "latex_normalization_failure": "LaTeX 归一化失败",
+    "solver_math_error": "求解/数学错误",
+    "runtime_error": "运行时错误"
+  },
+  "examples": {
+    "verifier_misjudgment": [
+      {
+        "id": "harp_1984_aime_10_957",
+        "expected": "119",
+        "prediction": "30",
+        "evidence": [
+          {
+            "signal": "wrong_consensus_lock",
+            "answer": "30",
+            "support": 2
+          },
+          {
+            "signal": "verifier_misjudgment",
+            "items": [
+              {
+                "kind": "false_accept",
+                "answer": "30",
+                "role": "constraint_interval_solver"
+              },
+              {
+                "kind": "false_accept",
+                "answer": "30",
+                "role": "algebra_cross_checker"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "harp_1984_aime_14_961",
+        "expected": "38",
+        "prediction": "18",
+        "evidence": [
+          {
+            "signal": "wrong_consensus_lock",
+            "answer": "18",
+            "support": 4
+          },
+          {
+            "signal": "verifier_misjudgment",
+            "items": [
+              {
+                "kind": "false_accept",
+                "answer": "18",
+                "role": "modular_solver"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "records": [
+    {
+      "id": "harp_1984_aime_10_957",
+      "primary_cause": "verifier_misjudgment",
+      "root_causes": [
+        "wrong_consensus",
+        "verifier_misjudgment"
+      ],
+      "evidence": [
+        {
+          "signal": "wrong_consensus_lock",
+          "answer": "30",
+          "support": 2
+        },
+        {
+          "signal": "verifier_misjudgment",
+          "items": [
+            {
+              "kind": "false_accept",
+              "answer": "30",
+              "role": "constraint_interval_solver"
+            },
+            {
+              "kind": "false_accept",
+              "answer": "30",
+              "role": "algebra_cross_checker"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "harp_1984_aime_14_961",
+      "primary_cause": "verifier_misjudgment",
+      "root_causes": [
+        "wrong_consensus",
+        "verifier_misjudgment"
+      ],
+      "evidence": [
+        {
+          "signal": "wrong_consensus_lock",
+          "answer": "18",
+          "support": 4
+        },
+        {
+          "signal": "verifier_misjudgment",
+          "items": [
+            {
+              "kind": "false_accept",
+              "answer": "18",
+              "role": "modular_solver"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

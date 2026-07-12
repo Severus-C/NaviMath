@@ -1,0 +1,44 @@
+{
+  "total": 4,
+  "correct": 4,
+  "accuracy": 1.0,
+  "by_subject": {
+    "counting_and_probability": {
+      "total": 2,
+      "correct": 2,
+      "accuracy": 1.0
+    },
+    "geometry": {
+      "total": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    },
+    "number_theory": {
+      "total": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    }
+  },
+  "by_answer_type": {
+    "integer": {
+      "total": 2,
+      "correct": 2,
+      "accuracy": 1.0
+    },
+    "integer_mod_1000": {
+      "total": 2,
+      "correct": 2,
+      "accuracy": 1.0
+    }
+  },
+  "by_contest": {
+    "AIME": {
+      "total": 4,
+      "correct": 4,
+      "accuracy": 1.0
+    }
+  },
+  "by_error_type": {
+    "correct": 4
+  }
+}

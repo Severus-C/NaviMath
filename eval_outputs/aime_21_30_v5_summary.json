@@ -1,0 +1,55 @@
+{
+  "total": 10,
+  "correct": 6,
+  "accuracy": 0.6,
+  "by_subject": {
+    "algebra": {
+      "total": 4,
+      "correct": 3,
+      "accuracy": 0.75
+    },
+    "counting_and_probability": {
+      "total": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    "geometry": {
+      "total": 2,
+      "correct": 1,
+      "accuracy": 0.5
+    },
+    "number_theory": {
+      "total": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    "precalculus": {
+      "total": 2,
+      "correct": 2,
+      "accuracy": 1.0
+    }
+  },
+  "by_answer_type": {
+    "integer": {
+      "total": 5,
+      "correct": 3,
+      "accuracy": 0.6
+    },
+    "integer_mod_1000": {
+      "total": 5,
+      "correct": 3,
+      "accuracy": 0.6
+    }
+  },
+  "by_contest": {
+    "AIME": {
+      "total": 10,
+      "correct": 6,
+      "accuracy": 0.6
+    }
+  },
+  "by_error_type": {
+    "correct": 6,
+    "math_or_normalization_mismatch": 4
+  }
+}

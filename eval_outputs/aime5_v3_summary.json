@@ -1,0 +1,40 @@
+{
+  "total": 5,
+  "correct": 4,
+  "accuracy": 0.8,
+  "by_subject": {
+    "algebra": {
+      "total": 3,
+      "correct": 3,
+      "accuracy": 1.0
+    },
+    "geometry": {
+      "total": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    "precalculus": {
+      "total": 1,
+      "correct": 1,
+      "accuracy": 1.0
+    }
+  },
+  "by_answer_type": {
+    "integer": {
+      "total": 5,
+      "correct": 4,
+      "accuracy": 0.8
+    }
+  },
+  "by_contest": {
+    "AIME": {
+      "total": 5,
+      "correct": 4,
+      "accuracy": 0.8
+    }
+  },
+  "by_error_type": {
+    "correct": 4,
+    "math_or_normalization_mismatch": 1
+  }
+}

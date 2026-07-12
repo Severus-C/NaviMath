@@ -1,0 +1,39 @@
+{
+  "total": 2,
+  "correct": 0,
+  "accuracy": 0.0,
+  "by_subject": {
+    "algebra": {
+      "total": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    "number_theory": {
+      "total": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    }
+  },
+  "by_answer_type": {
+    "integer": {
+      "total": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    },
+    "integer_mod_1000": {
+      "total": 1,
+      "correct": 0,
+      "accuracy": 0.0
+    }
+  },
+  "by_contest": {
+    "AIME": {
+      "total": 2,
+      "correct": 0,
+      "accuracy": 0.0
+    }
+  },
+  "by_error_type": {
+    "math_or_normalization_mismatch": 2
+  }
+}

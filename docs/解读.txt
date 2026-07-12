@@ -1,0 +1,1649 @@
+欢迎来到挑战杯 Intern-S 智能体社区知识库。本知识库面向参赛选手、赛事答疑同学和技术支持同学，集中说明本赛题的正式信息、baseline 使用方式、Intern-S API 配置、提交评测规则、FAQ 与榜单入口。
+本赛题围绕 Intern-S 系列模型的数学推理智能体设计展开。选手需要基于 baseline 或自定义实现，在 user_agent.py 中提供符合平台约定的 ReasoningAgent，并通过 solve(problem: str, metadata: dict) -> dict 返回可评测的最终答案。
+先看哪里
+如果你是第一次进入本知识库，建议按下面顺序阅读：
+目标
+推荐入口
+你会获得什么
+了解赛题与提交要求
+初赛赛题文档
+任务目标、baseline 作用、智能体接口、输入输出格式、提交与评测流程
+跑通本地 baseline
+快速开始
+环境准备、依赖安装、本地样例运行、输出检查
+配置 Intern-S API
+API 使用说明
+API Token 获取、环境变量配置、模型选择、流控申请
+准备正式提交
+提交评测与说明
+提交包结构、ReasoningAgent 接口、官方 client 与 runner、自检清单
+查找常见问题
+FAQ 与答疑沉淀
+本地调试、API、提交、评测等问题的沉淀入口
+查看成绩变化
+榜单
+榜单入口、更新说明和结果解读规则
+比赛阶段、截止时间、规则调整和资源变更以 公告与赛题更新 及赛事官方通知为准。首页只提供导航和行动路径，不单独发布未确认的时间节点。
+新手 30 分钟路径
+1. 阅读 初赛赛题文档，确认本赛题要求你实现的是数学推理智能体，而不是修改评测平台或隐藏测试集。
+2. 打开 环境准备与依赖安装，完成 Python 环境、虚拟环境和 baseline 依赖安装。
+3. 按 跑通 Baseline 与检查输出 运行本地样例，确认输出 JSON 中包含非空 final_response。
+4. 阅读 获取密钥与安全管理，把 API Token 放在本地环境变量中，不要写入代码、提交包或 trace。
+5. 对照 ReasoningAgent 接口与返回格式 检查 user_agent.py，确保平台可以导入 ReasoningAgent 并调用 solve。
+6. 提交前使用 提交前自检清单 逐项检查依赖、路径、返回字段和敏感信息。
+参赛开发重点
+- user_agent.py 是正式评测加载选手实现的核心文件。
+- ReasoningAgent 需要支持由平台注入官方 client，不应在代码中硬编码 API Token。
+- solve(problem: str, metadata: dict) -> dict 必须返回可 JSON 序列化的字典，并包含非空字符串字段 final_response。
+- trace 建议记录关键推理步骤、候选答案和验证过程，但必须脱敏，不写入密钥、个人信息或无关日志。
+- baseline 中的 main.py 和 llm_client.py 用于本地理解流程，正式评测会使用官方 runner 与官方 client。
+- 本地样例数据中的 answer 只用于调试对照，正式评测不会向选手代码提供标准答案。
+常用入口
+分类
+页面
+适合什么时候看
+公告
+公告与赛题更新
+查看规则、资源、API、提交和榜单相关正式变更
+赛题
+初赛赛题文档
+首次了解任务，或确认接口与评测约束
+快速开始
+快速开始
+从零跑通 baseline，定位本地运行问题
+API
+API 使用说明
+配置 Intern-S API、理解模型与流控
+提交
+提交评测与说明
+准备提交包，确认正式评测如何调用代码
+FAQ
+FAQ 与答疑沉淀
+遇到重复问题时先查已有答复
+榜单
+榜单
+查看公开结果、更新时间和结果解释
+维护者入口
+- 发布正式通知前，先在 公告与赛题更新 使用统一模板写清影响范围、选手动作和生效方式。
+- 任何会影响选手代码、提交包、API 调用、评测结果或榜单解释的变更，都需要同步记录到 更新日志。
+- FAQ 应优先沉淀可复用答复，避免把一次性个人排障记录写成官方规则。
+- 榜单页面只呈现已确认的公开信息；分数计算、更新时间和异常处理口径需要与公告保持一致。
+安全提醒
+请不要在知识库、提交包、截图、日志或 trace 中暴露 API Token、访问令牌、个人手机号、邮箱、身份证号等敏感信息。示例中如需说明密钥配置，只描述环境变量名和配置方式，不展示真实密钥或可复用的密钥片段。
+
+本文档为挑战杯人工智能赛道初赛赛题文档，面向参赛选手说明本赛题的任务目标、baseline 仓库的作用、智能体接口规范、输入输出格式、代码提交方式以及自动判分系统的基本工作流程。
+1. 赛题简介
+本赛题围绕 Intern-S 系列模型的数学智能体设计与推理创新展开。选手需要设计一个能够解决数学问题的推理智能体。智能体接收一道数学题文本，结合题目元信息进行推理，并输出最终答案。
+选手的核心任务是实现：
+agent.solve(problem: str, metadata: dict) -> dict
+平台会在正式评测时读取实际测试题，调用选手提交代码中的该入口函数，取得 final_response，并结合官方 judger 与标准答案进行判分。
+本赛题鼓励选手探索不同的智能体设计方式，包括但不限于：
+- 提示词设计与多轮推理
+- 多候选生成、验证与选择
+- 规划、反思、纠错、答案格式化
+- 工具调用、检索、记忆或其它推理策略
+- 面向数学题的专门解析、符号计算或后处理
+最终评分主要依据 final_response 的答案正确性。trace 可用于记录智能体的推理与交互过程，便于异常排查、结果展示和同分情况下的设计质量参考。
+2. Baseline 仓库说明
+Baseline 仓库地址：https://github.com/InternLM/Challenge-Cup-2026
+本仓库提供一个 naive agent baseline，作用是帮助选手理解：
+- 赛题内容与本地调试方式
+- 输入数据格式
+- 智能体入口函数
+- 智能体输出格式
+- 平台 runner 与选手代码之间的调用关系
+baseline 只是一个最小可运行示例，不限制选手的具体实现。选手可以保留、修改或替换其中的智能体逻辑，也可以新增模块、工具和依赖。但正式提交的仓库必须满足平台约定的入口规范。
+必须包含的文件
+选手提交的仓库根目录必须包含：
+user_agent.py
+平台 runner 会从该文件中加载选手实现。其它文件可以根据需要添加，例如：
+requirements.txt
+tools/
+prompts/
+utils/
+但所有新增文件都应使用相对路径读取，不要依赖本地机器上的绝对路径。
+user_agent.py 必须遵守的规范
+user_agent.py 中必须提供类：
+class ReasoningAgent:
+    ...
+平台会使用官方 client 初始化该类：
+from user_agent import ReasoningAgent
+
+agent = ReasoningAgent(client=official_client)
+因此 ReasoningAgent 至少需要支持如下构造方式：
+def __init__(self, client, *args, **kwargs):
+    ...
+其中 client 由平台提供。选手不要在代码中写死 API key，也不要假设本地存在固定的 API 配置文件。正式评测时，模型访问、限流、token 统计、超时控制等由官方 client 和平台 runner 统一管理。
+评测时平台提供的 client 与 baseline 中 llm_client.py 的 InternChatClient 结构一致，可作为本地实现参考。选手可以参考其中的 chat(messages, temperature, max_tokens) 调用方式组织模型请求：
+response = client.chat(messages=[
+        {"role": "user", "content": problem},
+    ],
+    temperature=0.2,
+    max_tokens=4096,
+)
+ReasoningAgent 必须提供推理函数：
+def solve(self, problem: str, metadata: dict) -> dict:
+    ...
+输入参数含义如下：
+- problem: 数学题题面文本。
+- metadata: 题目元信息字典，至少可能包含 idx。正式评测时，metadata 的具体字段以平台 runner 为准。选手代码不得依赖 answer、标准答案或隐藏评测数据。
+返回值必须是 dict，且必须包含非空字符串字段：
+{
+  "final_response": "最终答案"
+}
+推荐同时返回 trace：
+{
+  "final_response": "最终答案",
+  "trace": [
+    {"step": "plan", "content": "..."},
+    {"step": "model_call", "content": "..."},
+    {"step": "finalize", "content": "..."}
+  ]
+}
+字段要求：
+- final_response 必须是可读的最终答案，不能为空。
+- trace 可选，建议为列表，记录关键推理步骤、模型调用摘要、候选答案、验证过程等。
+- 返回内容必须可以被 JSON 序列化。
+- 不要在 trace 中写入 API key、访问令牌、个人隐私信息或其它敏感内容。
+实现自由度
+选手可以使用 baseline 中的 lagent 示例，也可以完全不用 lagent。平台只要求 user_agent.py 暴露符合规范的 ReasoningAgent 和 solve 方法。
+选手可以新增辅助函数、类和模块，也可以在 ReasoningAgent 内部维护状态。但需要注意：
+- 不要依赖评测题之间的固定顺序。
+- 不要假设多个题目一定在同一个进程中运行。
+- 不要依赖本地绝对路径。
+- 不要读取或构造隐藏测试集、标准答案或 judger 信息。
+- 不要在代码中硬编码 API key。
+- 不要输出恶意内容、执行破坏性操作或规避平台资源限制。
+3. 输入数据与输出样例
+本地调试输入为 JSONL 文件，每行是一道题。每行至少包含：
+{"idx": 0, "problem": "题目文本"}
+样例：
+{"idx": 0, "problem": "设$\\mathbb{F}_{81}$为$81$元的有限域。$T=\\{\\alpha\\in\\mathbb{F}_{81}|\\mathbb{F}_{81}=\\mathbb{F}_3(\\alpha)\\}$。求$T$中元素的个数。", "answer": "72", "subject": "抽象代数", "source": "sample"}
+其中 answer 只会出现在样例数据中，用于选手本地对照调试。正式评测不会向 solve 传入标准答案。
+本地 runner 会将每道题的结果保存为独立 JSON 文件：
+outputs/
+  0.json
+  1.json
+  2.json
+成功输出样例：
+{
+  "idx": 0,
+  "status": "success",
+  "final_response": "72",
+  "trace": [
+    {
+      "step": "solve",
+      "content": "有限域 F_81 是 F_3 上 4 维扩张，生成整个扩张的元素个数为 81 - 9 = 72。"
+    }
+  ]
+}
+异常输出样例：
+{
+  "idx": 0,
+  "status": "error",
+  "final_response": "",
+  "error": {
+    "type": "RuntimeError",
+    "message": "错误信息"
+  },
+  "trace": []
+}
+本地调试时，如果某个 idx.json 已经存在且文件非空，runner 会跳过该题，便于中断后继续运行。
+4. 本地调试建议
+安装依赖：
+pip install -r requirements.txt
+设置 API key：
+export INTERN_API_KEY="sk-..."
+运行样例：
+python main.py --input_file sample_data/dev.jsonl --output_dir sample_outputs
+本地 runner 默认并发数为 8。如需调整：
+export LOCAL_MAX_CONCURRENCY=4
+本地调试结果只用于选手自测，不代表正式评测分数。正式评测会使用隐藏测试集、官方 client、平台 runner 和官方 judger。
+5. Intern-S API 使用说明
+选手可以使用报名挑战杯时填写的手机号注册书生 API 控制台：
+https://internlm.intern-ai.org.cn/api/document
+书生 API 控制台中的 API 均可免费使用。平台会对普通用户执行流控策略：
+RPM 30
+TPM 150000
+如果本地调试或实验需要更高流控，可以前往以下页面申请提升：
+https://internlm.intern-ai.org.cn/api/strategy
+申请时请在备注中填写“挑战杯”。通常情况下，200 RPM 以内的流控提升会在 1-2 个工作日内生效。具体生效时间以 API 控制台状态为准。
+选手可以使用 API 控制台下的任意可用模型作为智能体 base model，例如：
+- intern-s1
+- intern-s1-pro
+- intern-s2-preview
+本地使用 baseline runner 调试时，可以通过环境变量指定模型：
+export INTERN_MODEL="intern-s2-preview"
+如需调整 API endpoint，请以书生 API 控制台文档中的接口地址为准配置 INTERN_API_BASE。
+提交仓库至评分系统时，选手可以选择智能体实际使用的模型。正式评测时，平台 runner 会通过官方 client 使用该模型进行调用。
+评分系统 client 使用的 API 来自书生 API 控制台：
+https://internlm.intern-ai.org.cn/api
+建议选手本地调试时也使用同一份 API 控制台，避免本地实验环境和正式评分环境之间产生模型行为、接口格式或网关策略差异。
+6. 赛题提交方式
+参赛队伍可以在 2026-06-30 报名结束后 (2026-7-01 起) 开始提交作品进行判分，选手需要基于 baseline 仓库准备自己的提交代码，并向判分系统提交仓库地址与 commit SHA。
+推荐流程：
+1. fork baseline 仓库代码并将 fork 的仓库 clone 到本地。
+2. 在自己的仓库中完成实现。
+3. 确保仓库根目录包含符合规范的 user_agent.py。
+4. 将代码推送到 github (fork 的仓库或者自己的私有仓库均可)。
+5. 在判分系统中完成仓库授权。
+6. 向判分系统提交仓库地址和 commit SHA。
+关于仓库可见性：
+- 如果直接 fork 一个公开 baseline 仓库，fork 和提交内容通常也是公开可见的。
+- 如果不希望自己的方案公开，建议将 baseline clone 到本地后，推送到自己的 private repository。
+- 选手也可以保持仓库公开，但需自行承担方案被其他人看到的风险。
+判分系统会以选手提交的 commit SHA 作为评测快照。请务必提交具体 commit SHA。
+最终提交
+初赛截止前，请根据挑战杯官网要求，将自己的最终版本代码仓库与赛题要求的其它材料打包成 .zip 文件发送邮件至：
+changshuai@pjlab.org.cn
+建议压缩包内至少包含：
+- 最终版本代码。
+- user_agent.py 及所有运行所需的辅助文件。
+- requirements.txt 或其它依赖说明。
+- 一份说明文件，写明队伍信息、题目名称、仓库地址、分支名称、commit hash 和选择使用的模型。
+提交前建议检查：
+- user_agent.py 可以被正常 import。
+- ReasoningAgent(client=official_client) 可以正常初始化。
+- solve(problem, metadata) 返回包含非空 final_response 的字典。
+- 所有依赖都已写入 requirements.txt。
+- 代码中没有硬编码 API key、个人路径、临时文件路径或调试用标准答案。
+7. 自动判分系统
+自动判分系统预计 7 月上线，具体上线日期以赛事通知为准。
+判分系统上线前，如果选手需要提交作品并获取评测分数，可以将代码库打包成 .zip 文件发送邮件至：
+changshuai@pjlab.org.cn
+maoxin@pjlab.org.cn
+guyuzhe@pjlab.org.cn
+wangpanpan@pjlab.org.cn
+邮件模板如下：
+邮件主题：[挑战杯初赛评测申请] 队伍名称 - 题目名称 - commit hash
+
+收件人：changshuai@pjlab.org.cn
+
+正文：
+<可选择补充正文>
+队伍名称：
+<队伍名称>
+题目名称：基于 Intern-S 系列模型的数学智能体设计与推理创新
+
+报名成员信息（至少填写 1 名挑战杯官网内报名成员）：
+- 姓名：
+- 学校：
+- 报名手机号：
+
+需要评测的代码版本：
+- 仓库地址：<可选>
+- 分支名称：main
+- commit hash：
+- 选择使用的模型：例如 intern-s2-preview
+
+附件：
+- 代码库 zip 文件名：
+
+备注：
+- 如有特殊依赖、运行说明或需要说明的异常情况，请在这里填写。
+邮件评测同样以邮件中写明的分支名称和 commit hash 为准。请确保附件中的代码版本与邮件正文中的 commit hash 对应，避免评测结果无法复现。
+后续自动判分系统的基本工作流程如下：
+1. 选手在系统中提交仓库地址与 commit SHA。
+2. 系统检查仓库授权，并拉取对应 commit 的代码。
+3. 系统在隔离环境中安装依赖并加载 user_agent.py。
+4. 系统根据选手提交时选择的模型，使用官方 client 初始化 ReasoningAgent。
+5. 平台 runner 读取正式评测题，调用 agent.solve(problem, metadata)。
+6. 系统收集 final_response、trace、运行耗时、异常信息和资源使用情况。
+7. 官方 judger 结合标准答案对结果进行判分。
+8. 系统返回最终分数以及是否存在异常。
+正式评测时：
+- 平台会使用官方闭源测试集。
+- 平台会使用来自书生 API 控制台的官方 client，不使用选手自带 API key。
+- 平台会统一控制超时、并发、模型调用预算和资源限制。
+- 平台不会向选手返回逐题题目、标准答案、judger 细节或逐题详细反馈。
+- 如果代码无法安装、无法 import、入口函数不符合规范、运行超时、输出格式错误或触发安全策略，系统会标记异常。
+8. 初赛评分与晋级
+初赛完全采取客观评分方式对所有参赛队伍进行排名。排名依据为初赛截止日期时，判分系统榜单上的队伍最终排名。
+在初赛截止日期前，组委会会根据整体赛题完成质量、参赛队伍分数分布等情况，公布进入决赛的最低分数线。进入决赛的队伍数量少于 30 支，具体晋级名单以赛事官方通知为准。
+9. 提交次数限制
+从判分系统上线日到初赛截止时间，每支队伍的提交次数限制为：
+- 每天最多提交 2 次 ---> 定时出分 (12:00，最新的提交刷新分数)
+- 每周最多提交 10 次。
+判分系统只会给出最终分数以及是否存在异常。请选手在本地充分调试后再提交正式评测，避免因格式错误、依赖缺失或超时浪费提交次数。
+10. 常见异常
+以下情况可能导致判分异常：
+- 仓库授权失败，系统无法拉取提交。
+- 提交的是分支名而不是 commit SHA。
+- user_agent.py 不存在。
+- ReasoningAgent 类不存在或构造函数不接受 client。
+- solve 方法不存在、签名不符合要求或抛出异常。
+- 返回值不是字典。
+- final_response 缺失、为空或不是字符串。
+- 返回值无法 JSON 序列化。
+- 依赖无法安装或版本冲突。
+- 运行超时或资源使用超过平台限制。
+- 代码依赖本地绝对路径、私有文件或未声明资源。
+- 代码包含硬编码密钥、恶意行为或规避评测限制的逻辑。
+11. 选手实现建议
+为了提高提交稳定性，建议选手：
+- 保持入口接口简单稳定，把复杂逻辑封装到内部模块。
+- 对模型输出做答案抽取和格式化，避免 final_response 过长或答案不明确。
+- 对异常进行适度处理，保证单题失败不会影响整体运行。
+- 控制模型调用次数和 token 使用，避免超时。
+- 在本地使用样例数据完整跑通安装、初始化、推理和输出保存流程。
+- 保留清晰的 trace，但不要记录敏感信息。
+本仓库的 baseline 仅用于说明接口和基本思路。正式比赛欢迎选手提交更强、更稳定、更有创造性的数学智能体实现。
+
+公告与赛题更新
+
+本页集中发布挑战杯 Intern-S 智能体社区的正式公告、赛题说明变更和资源更新。凡是会影响选手阅读规则、运行 baseline、调用 Intern-S API、提交代码、理解评测结果或查看榜单的信息，都应在这里留下可追踪记录。
+如果公告内容和群内口头答复不一致，以本页发布的正式公告及对应更新日志为准；如发现冲突，请联系赛事运营或技术支持同学修正。
+当前阅读建议
+- 首次参赛：先阅读 初赛赛题文档，再进入 快速开始。
+- 已经开始开发：重点关注本页中与 baseline、API、提交评测相关的变更。
+- 准备提交：同时检查 提交评测与说明 和 提交前自检清单。
+- 排查异常：先查 FAQ 与答疑沉淀，再根据公告确认是否存在近期规则或资源变化。
+公告范围
+类型
+需要发布公告的情况
+选手通常需要做什么
+赛题规则
+任务目标、评分口径、允许或禁止事项发生变化
+重新阅读受影响规则，检查方案是否仍符合要求
+baseline
+baseline 代码、样例数据、依赖或目录结构发生变化
+拉取新版本或对照差异调整本地代码
+API
+API 入口、模型选择、鉴权方式、流控策略或使用统计口径发生变化
+检查环境变量、模型配置、并发和重试策略
+提交评测
+提交包结构、接口要求、运行环境、评测流程或判分说明发生变化
+按最新说明重新自检提交包
+榜单
+榜单更新时间、展示口径、异常处理或分数解释发生变化
+按公告理解成绩变化，不自行推断未公开规则
+资源
+文档入口、样例文件、平台链接或辅助材料发生变化
+使用最新入口，避免继续引用旧链接
+发布规则
+- 公告必须写清楚发布方、发布时间、影响范围、生效方式和选手需要采取的动作。
+- 重大规则变化需要同步赛事群，并在本页保留完整记录。
+- 文档正文发生实质性变化时，不要直接覆盖旧口径而不留痕；应同步更新 更新日志。
+- 只影响排版、错别字或链接展示的小修正，可以记录在更新日志中，不必单独发布公告。
+- 涉及 API Token、访问令牌、个人信息或评测内部凭据的内容不得写入公告正文、示例或截图。
+- 公告中的日期、截止时间、平台链接和版本号必须来自赛事组确认信息；未确认前使用字段占位，不写成事实。
+公告模板
+发布正式公告时，可复制以下模板并替换方括号中的字段。
+## [公告标题]
+
+- 发布时间：[YYYY-MM-DD HH:mm]
+- 发布方：[赛事组/技术支持/评测平台]
+- 影响范围：[赛题规则/baseline/API/提交评测/榜单/资源]
+- 生效方式：[立即生效/自指定时间生效/仅说明]
+- 选手需要做什么：[无需操作/重新阅读文档/更新代码/重新提交/重新配置 API]
+
+### 背景
+
+[说明为什么发布本公告，避免写入未确认推测。]
+
+### 变更内容
+
+[逐条列出变化点。涉及规则、接口或提交格式时，应给出变化前后的差异。]
+
+### 对选手的影响
+
+[说明是否影响历史提交、正在运行的本地实验、API 调用、评测结果或榜单展示。]
+
+### 推荐操作
+
+1. [第一项操作]
+2. [第二项操作]
+
+### 相关页面
+
+- [相关说明页标题](相对路径)
+- [更新日志](https://aicarrier.feishu.cn/wiki/C3dBwzdyFiDxEIkYq7ucOZ59neh)
+变更说明模板
+当不需要单独公告、但需要记录一次文档或资源更新时，可在 更新日志 使用以下字段：
+字段
+填写要求
+日期
+使用实际发布日期或更新时间
+更新类型
+从公告、赛题文档、baseline、API、提交评测、FAQ、榜单、资源中选择
+更新摘要
+用一句话说明发生了什么
+影响范围
+写清影响哪些页面、代码、提交或选手操作
+选手动作
+明确写“无需操作”或具体动作
+负责人
+填写发布或确认该更新的维护者
+维护检查清单
+发布或修改本页前，请逐项检查：
+- 是否包含明确的影响范围和选手动作。
+- 是否同步更新了 更新日志。
+- 是否需要同步赛事群或评测平台提示。
+- 是否引用了正确的赛题文档、快速开始、API、提交评测、FAQ 或榜单页面。
+- 是否避免暴露 API Token、内部评测凭据、个人信息和未公开测试内容。
+
+更新日志
+
+本页记录挑战杯 Intern-S 智能体社区知识库、赛题说明、baseline、Intern-S API、提交评测、FAQ 与榜单相关内容的实质变化。更新日志用于帮助选手判断自己是否需要重新阅读规则、调整代码、重新配置 API 或重新提交。
+当前页面只定义记录规范和模板，不预置未发布的公告、日期或版本号。后续每次确认变更后，由维护者按时间倒序追加记录。
+记录表
+日期
+更新类型
+更新摘要
+影响范围
+选手动作
+负责人
+[YYYY-MM-DD]
+
+[公告/赛题文档/baseline/API/提交评测/FAQ/榜单/资源]
+[一句话摘要]
+[受影响页面或流程]
+[无需操作/需要重新阅读/需要更新代码/需要重新提交]
+[维护者]
+
+正式发布时，请删除示例占位行或将其替换为真实记录。不要保留空泛描述。
+必须记录的变化
+以下变化需要写入更新日志；其中影响规则、提交或评测结果的变化还应在 公告与赛题更新 发布公告：
+- 赛题目标、评分口径、允许事项或禁止事项发生变化。
+- ReasoningAgent 初始化方式、solve 入参、返回字段或 JSON 序列化要求发生变化。
+- baseline 代码、样例数据、依赖版本、目录结构或运行命令发生变化。
+- Intern-S API 的入口、模型、鉴权方式、流控策略、错误处理或使用统计口径发生变化。
+- 提交包结构、依赖安装方式、评测环境、官方 client、官方 runner 或判分流程发生变化。
+- FAQ 新增会影响大多数选手操作判断的答复。
+- 榜单更新时间、展示口径、异常处理方式或分数解释发生变化。
+可合并记录的变化
+以下变化可以合并为同一条记录，避免日志噪声：
+- 同一页面内的错别字、格式、标题层级或链接展示修正。
+- 同一天内多处文案澄清，且不改变规则、接口、提交或评测口径。
+- FAQ 中针对同一问题的补充说明。
+- 榜单页面的展示优化，但不改变结果解释。
+不应记录的内容
+- 未经赛事组确认的内部讨论、推测或临时方案。
+- 真实 API Token、访问令牌、平台内部凭据或个人隐私信息。
+- 隐藏测试集、标准答案、judger 内部实现或未公开评测细节。
+- 只对维护者本地工作流有意义、不会影响选手的信息。
+更新模板
+维护者可以复制以下模板追加到记录表下方，用于说明重大变更。普通变更只需要维护上方记录表。
+## [YYYY-MM-DD] [更新标题]
+
+- 更新类型：[公告/赛题文档/baseline/API/提交评测/FAQ/榜单/资源]
+- 影响范围：[受影响页面、代码、提交流程或选手群体]
+- 选手动作：[无需操作/需要重新阅读/需要更新代码/需要重新提交]
+- 负责人：[维护者]
+
+### 变化内容
+
+[列出已确认的变化点。涉及规则、接口或提交格式时，写清变化前后差异。]
+
+### 影响说明
+
+[说明是否影响历史提交、本地 baseline、API 调用、评测结果或榜单展示。]
+
+### 相关链接
+
+- [公告与赛题更新](https://aicarrier.feishu.cn/wiki/SlcEwndZciIgBIk9CnPcYJFunFf)
+- [相关页面标题](相对路径)
+维护规则
+- 按时间倒序记录，最新变化放在最前。
+- 同一变更如果同时修改多个页面，保留一条主记录，并在影响范围中列出所有相关页面。
+- 规则、接口、提交和评测相关变化必须写清“选手动作”，不能只写“已更新”。
+- 已发布公告的变更，应在更新日志中链接到对应公告或说明页。
+- 如果一次更新需要选手重新提交或重新配置 API，应在公告、更新日志和相关说明页中使用一致表述。
+
+快速开始
+
+本页帮助你用最短路径跑通本地 baseline，确认环境、API Token、runner 和 ReasoningAgent 接口都能正常工作。完成本页后，你应该能够得到每道样例题对应的 JSON 输出，并知道下一步主要修改 user_agent.py 的哪一部分。
+适用读者
+- 第一次打开本赛题 baseline 的参赛选手。
+- 想先完成一次本地试跑，再开始设计智能体的参赛选手。
+- 遇到本地运行失败，需要快速定位是环境、鉴权、流控还是代码返回格式问题的参赛选手。
+你将完成什么
+本地快速开始包含四件事：
+1. 准备 Python 3.10+ 环境并安装依赖。
+2. 配置书生 API 访问所需的环境变量。
+3. 使用 sample_data/dev.jsonl 跑通 baseline。
+4. 检查 sample_outputs/*.json，确认每道题都有可提交格式的输出。
+首次试跑建议把本地并发降到 1，先验证链路可用，再逐步增加并发或候选采样次数。
+export LOCAL_MAX_CONCURRENCY=1
+Baseline 目录关系
+快速开始阶段主要关注 challenger_agent_baseline 目录：
+challenger_agent_baseline/
+  main.py                 # 本地样例 runner：读取 JSONL，逐题写出 JSON
+  llm_client.py           # 本地样例 API client：读取 INTERN_* 环境变量
+  user_agent.py           # 参赛选手主要修改文件
+  requirements.txt        # baseline 依赖
+  sample_data/dev.jsonl   # 本地样例输入，共 3 道题
+各文件的职责如下：
+- main.py：读取输入 JSONL，为每道题调用 ReasoningAgent.solve(problem, metadata)，再把结果写入 output_dir/{idx}.json。
+- llm_client.py：读取 INTERN_API_KEY、INTERN_API_BASE、INTERN_MODEL，用 OpenAI-compatible chat completions 形式请求模型。
+- user_agent.py：baseline 的智能体实现，当前示例使用 lagent 组织 generate-verify-select 流程。正式参赛时，你主要在这个文件中改进智能体。
+- sample_data/dev.jsonl：本地自测样例。样例中可能带有 answer 便于人工对照，正式评测不会把标准答案传入智能体。
+最短运行路径
+下面命令假设你位于项目根目录。如果你已经进入 challenger_agent_baseline，可以从创建虚拟环境开始执行。
+cd challenger_agent_baseline
+
+python3.10 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+export INTERN_API_KEY="替换为你自己的 API Token"
+export INTERN_MODEL="intern-s2-preview"
+export LOCAL_MAX_CONCURRENCY=1
+
+python main.py --input_file sample_data/dev.jsonl --output_dir sample_outputs
+不要把 API Token 写进代码、提交包、截图或公开文档。上面的 INTERN_API_KEY 只展示变量名和占位写法。
+运行时通常会看到类似输出：
+Loaded 3 items. Max concurrency: 1.
+Finished idx=0
+Finished idx=1
+Finished idx=2
+Saved outputs to sample_outputs
+如果并发大于 1，Finished idx=... 的顺序可能不同，这是正常现象。
+成功标准
+一次本地试跑是否成功，不看终端里是否只打印了 Finished，而要检查输出 JSON：
+- sample_outputs/0.json、sample_outputs/1.json、sample_outputs/2.json 均已生成。
+- 每个文件的 status 都是 success。
+- 每个文件的 final_response 都是非空字符串。
+- trace 如果存在，应为可 JSON 序列化的列表。
+可以用下面命令快速检查：
+find sample_outputs -maxdepth 1 -name '*.json' -print | sort
+jq -r '"\(.idx)\t\(.status)\tfinal_response_len=\(.final_response | length)"' sample_outputs/*.json
+如果没有安装 jq，可以使用 Python：
+python - <<'PY'
+import json
+from pathlib import Path
+
+for path in sorted(Path("sample_outputs").glob("*.json")):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    print(path.name, data.get("status"), len(data.get("final_response", "")))
+PY
+下一步修改哪里
+跑通 baseline 后，优先打开 user_agent.py。文件中有明确的参赛者设计区：
+# ==================== PARTICIPANT DESIGN AREA START ====================
+# ===================== PARTICIPANT DESIGN AREA END =====================
+你可以在设计区内调整：
+- 提示词、消息组织方式和答案格式化策略。
+- 候选生成次数、验证方式、投票或选择逻辑。
+- trace 中记录哪些关键推理步骤。
+- 是否新增工具函数、提示模板或辅助模块。
+请保持平台约定接口不变：
+agent.solve(problem: str, metadata: dict) -> dict
+返回值必须包含非空字符串字段 final_response，推荐同时返回列表形式的 trace。不要在 trace、日志或异常信息中写入 API Token。
+相关页面
+- 环境准备与依赖安装
+- 跑通 Baseline 与检查输出
+- 本地调试常见问题
+- API 使用说明
+- 提交评测与说明
+
+环境准备与依赖安装
+
+本页说明如何准备本地运行环境，重点避免 Python 版本、虚拟环境、依赖安装、API 环境变量带来的入门阻塞。建议先完成本页，再运行 baseline。
+环境要求
+推荐环境：
+- Python 3.10 或更高版本。
+- macOS、Linux 或 Windows WSL。
+- 可以访问 Python 包源和 GitHub。requirements.txt 中的 lagent 会从 GitHub 指定 commit 安装。
+- 可以访问书生 API 服务。
+- 有足够磁盘空间安装依赖。依赖中包含 ray 等体积较大的包，安装时间可能较长。
+不建议使用 Python 3.8。baseline 和依赖中使用了较新的类型语法，Python 3.8 可能在导入 lagent 或 user_agent.py 时触发兼容错误，例如 unsupported operand type(s) for |。
+创建虚拟环境
+进入 baseline 目录：
+cd challenger_agent_baseline
+使用 Python 标准库创建虚拟环境：
+python3.10 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+确认当前 Python 版本：
+python --version
+输出应为 Python 3.10.x 或更高版本。
+如果系统 Python 提示 externally-managed-environment，不要强行向系统环境安装依赖。可以改用 uv 创建隔离环境：
+uv venv --python 3.10 .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+如果你的系统中 python3.10 不存在，请先通过系统包管理器、conda、pyenv 或团队统一环境安装 Python 3.10+。
+安装依赖
+在 challenger_agent_baseline 目录中执行：
+python -m pip install -r requirements.txt
+安装完成后，可以做一个轻量检查：
+python - <<'PY'
+import lagent
+import requests
+
+print("lagent import ok")
+print("requests import ok")
+PY
+如果这里失败，先不要运行 main.py，应优先解决依赖安装问题。
+常见处理方式：
+- GitHub 访问失败：检查网络或代理配置，然后重新执行安装命令。
+- 包下载过慢：切换可用的 Python 包源，但不要改动 requirements.txt 后直接提交。
+- 磁盘空间不足：清理 pip 缓存或换到空间更充足的环境。
+- ray 等大依赖安装失败：先确认 Python 版本、操作系统架构和磁盘空间。
+配置 API 环境变量
+llm_client.py 会从环境变量读取 API 配置：
+- INTERN_API_KEY：必填，你自己的 API Token。
+- INTERN_API_BASE：可选，默认值为 https://chat.intern-ai.org.cn/api/v1/chat/completions。
+- INTERN_MODEL：可选，默认值为 intern-s2-preview。
+- LOCAL_MAX_CONCURRENCY：可选，本地 runner 并发数，默认值为 8。
+首次试跑建议显式设置低并发：
+export INTERN_API_KEY="替换为你自己的 API Token"
+export INTERN_MODEL="intern-s2-preview"
+export LOCAL_MAX_CONCURRENCY=1
+通常不需要设置 INTERN_API_BASE。如果确实需要覆盖，可以这样写：
+export INTERN_API_BASE="https://chat.intern-ai.org.cn/api/v1/chat/completions"
+安全注意事项：
+- 不要把 API Token 写入 user_agent.py、llm_client.py 或任何会提交的文件。
+- 不要把 API Token 粘贴到公开 Issue、群聊截图、文档或 trace 中。
+- 终端中的 export 只对当前 shell 会话生效。新开终端后需要重新设置，或使用你自己的安全密钥管理方式。
+- 如果 Token 过期或 401 鉴权失败，请重新生成或复制 Token，不要在文档中保存旧 Token。
+运行前自检
+执行 baseline 前，可以先检查这几项：
+pwd
+python --version
+python -c "import lagent, requests; print('deps ok')"
+test -n "$INTERN_API_KEY" && echo "INTERN_API_KEY is set"
+echo "LOCAL_MAX_CONCURRENCY=${LOCAL_MAX_CONCURRENCY:-8}"
+期望结果：
+- pwd 位于 challenger_agent_baseline。
+- Python 版本为 3.10+。
+- 依赖导入成功。
+- INTERN_API_KEY is set 被打印出来。
+- 首次运行时 LOCAL_MAX_CONCURRENCY 建议为 1。
+如果 INTERN_API_KEY is set 没有打印，说明当前 shell 没有设置 API Token。请重新执行 export INTERN_API_KEY="..."，其中 ... 应替换为你自己的 Token。
+
+跑通 Baseline 与检查输出
+
+本页说明如何使用 baseline 的本地 runner 运行样例数据，并判断结果是否符合提交前的基本格式要求。本地样例结果只用于自测，不代表正式评测分数。
+运行命令
+进入 baseline 目录并激活虚拟环境：
+cd challenger_agent_baseline
+source .venv/bin/activate
+首次运行建议低并发：
+export LOCAL_MAX_CONCURRENCY=1
+确认已经设置自己的 API Token 后运行样例：
+python main.py --input_file sample_data/dev.jsonl --output_dir sample_outputs
+本地 runner 会读取 sample_data/dev.jsonl 中的 3 道样例题，并把输出写入 sample_outputs。
+Runner 会做什么
+main.py 的执行流程如下：
+1. 读取输入 JSONL，每个非空行是一道题。
+2. 如果某行没有 idx，使用行号作为默认 idx。
+3. 初始化 InternChatClient 和 ReasoningAgent。
+4. 为每道题调用 ReasoningAgent.solve(problem, metadata)。
+5. 校验 solve 返回值中的 final_response 是非空字符串。
+6. 将每道题的结果写入 output_dir/{idx}.json。
+7. 如果某个 {idx}.json 已经存在且非空，跳过该题，便于中断后继续运行。
+runner 默认并发数为 8，由 LOCAL_MAX_CONCURRENCY 控制。首次验证链路时建议设置为 1；确认稳定后，再根据 API 流控和你的智能体调用次数逐步调高。
+样例输入格式
+sample_data/dev.jsonl 每行是一道题，至少包含：
+{"idx": 0, "problem": "题目文本"}
+样例数据可能额外包含：
+- answer：本地人工对照用的参考答案。
+- subject：题目所属方向。
+- source：样例来源标记。
+你的 solve(problem, metadata) 只应依赖题面和平台传入的元信息，不要把样例中的 answer 当作正式评测可用字段。正式评测不会向智能体提供标准答案。
+终端输出
+正常开始运行时，终端会先打印读取数量和并发数：
+Loaded 3 items. Max concurrency: 1.
+每道题处理完成后，会打印：
+Finished idx=0
+Finished idx=1
+Finished idx=2
+最后打印输出目录：
+Saved outputs to sample_outputs
+这些日志只说明 runner 已经为对应 idx 写出文件。最终是否成功，还要看 JSON 文件中的 status、final_response 和 error 字段。
+如果你重复运行同一个输出目录，且旧文件非空，可能看到：
+Skip idx=0 because sample_outputs/0.json already exists.
+这表示 runner 复用了已有输出。想重新生成结果时，请删除旧输出目录或换一个新的 --output_dir。
+输出文件格式
+成功输出应类似：
+{
+  "idx": 0,
+  "status": "success",
+  "final_response": "智能体对该题的最终答案",
+  "trace": [
+    {
+      "step": "policy_call_0",
+      "content": {
+        "message": "题目与提示词摘要",
+        "response": "候选解答"
+      }
+    }
+  ]
+}
+失败输出应类似：
+{
+  "idx": 0,
+  "status": "error",
+  "final_response": "",
+  "error": {
+    "type": "RuntimeError",
+    "message": "Chat completion failed after 3 attempts: ..."
+  },
+  "trace": []
+}
+字段含义：
+- idx：题目编号，来自输入数据或行号。
+- status：success 表示 solve 返回了合法结果；error 表示该题处理时抛出异常。
+- final_response：最终答案。正式评分主要依据这个字段。
+- trace：推荐记录推理过程、候选答案、验证和选择步骤，必须可 JSON 序列化。
+- error：仅失败时出现，包含异常类型和信息。
+检查是否跑通
+先检查文件数量：
+find sample_outputs -maxdepth 1 -name '*.json' -print | sort
+期望看到：
+sample_outputs/0.json
+sample_outputs/1.json
+sample_outputs/2.json
+再检查状态和答案长度：
+jq -r '"idx=\(.idx) status=\(.status) final_response_len=\(.final_response | length)"' sample_outputs/*.json
+所有文件都应满足：
+- status=success。
+- final_response_len 大于 0。
+- 没有 error 字段，或 error 为空。
+如果没有安装 jq，可以使用 Python 检查：
+python - <<'PY'
+import json
+from pathlib import Path
+
+ok = True
+for path in sorted(Path("sample_outputs").glob("*.json")):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    status = data.get("status")
+    response = data.get("final_response", "")
+    error = data.get("error")
+    print(f"{path.name}: status={status}, final_response_len={len(response)}")
+    if error:
+        print(f"  error={error}")
+    ok = ok and status == "success" and isinstance(response, str) and bool(response.strip())
+
+raise SystemExit(0 if ok else 1)
+PY
+如果命令退出码为 0，说明样例输出满足快速开始的基本格式要求；如果退出码为 1，请查看打印出的 error 信息并参考本地调试常见问题。
+没有生成输出文件
+如果命令很快退出，且 sample_outputs 中没有生成题目 JSON，优先看终端错误。常见情况包括：
+- RuntimeError: Missing API key. Set INTERN_API_KEY.：当前 shell 没有设置 INTERN_API_KEY，client 初始化失败。
+- ModuleNotFoundError: No module named 'lagent'：依赖没有安装到当前 Python 环境。
+- Python 类型语法兼容错误：当前 Python 版本过低，建议换到 Python 3.10+。
+- 输入文件路径错误：确认当前目录是 challenger_agent_baseline，并且 sample_data/dev.jsonl 存在。
+这类错误发生在单题处理前，runner 可能还没有机会写出 {idx}.json。
+检查单个错误
+当某个输出文件的 status 是 error 时，说明 runner 已经进入单题处理，但 solve 或模型请求过程中抛出了异常。先查看错误类型和信息：
+jq '.error' sample_outputs/0.json
+常见方向：
+- 401 Unauthorized 或鉴权失败：Token 无效、过期、复制错误或账号权限不匹配。
+- Chat completion failed after 3 attempts：模型请求连续失败，继续看后面的 HTTP 状态或服务返回信息。
+- ValueError: agent.solve must return a non-empty string field: final_response：你的 solve 返回缺少非空 final_response。
+- TypeError: Object of type ... is not JSON serializable：返回结果或 trace 中包含不能写入 JSON 的对象。
+跑通后做什么
+跑通 baseline 后，可以开始改进智能体：
+1. 打开 user_agent.py。
+2. 在 PARTICIPANT DESIGN AREA 标记之间修改提示词、采样、验证、选择和 trace 记录逻辑。
+3. 保持 ReasoningAgent 类名、构造方式和 solve(problem, metadata) 方法可被 runner 调用。
+4. 每次修改后，用新的输出目录做一次快速回归，例如：
+python main.py --input_file sample_data/dev.jsonl --output_dir sample_outputs_v2
+不要只看样例题答案是否碰巧正确，也要检查输出格式、异常处理和 trace 是否稳定。正式评测会使用隐藏测试集、官方 client、平台 runner 和官方 judger。
+
+本地调试常见问题
+
+本页收集快速开始阶段最常见的 baseline 本地运行问题。这里重点处理环境、依赖、API 鉴权、流控和输出格式；更完整的比赛问答会沉淀在 FAQ 页面。
+Missing API key. Set INTERN_API_KEY.
+原因：当前 shell 没有设置 INTERN_API_KEY，llm_client.py 无法初始化本地 API client。
+处理方式：
+export INTERN_API_KEY="替换为你自己的 API Token"
+然后重新运行：
+python main.py --input_file sample_data/dev.jsonl --output_dir sample_outputs
+如果你新开了一个终端，需要重新设置环境变量。不要把 Token 写进 user_agent.py、llm_client.py 或提交包。
+401 Unauthorized / 用户鉴权失败
+常见原因：
+- Token 复制不完整，包含多余空格或换行。
+- Token 已失效或已被重置。
+- 当前账号、服务或模型权限不匹配。
+- 手动设置了错误的 INTERN_API_BASE。
+处理方式：
+1. 重新从 API 控制台复制自己的 Token。
+2. 在当前 shell 中重新执行 export INTERN_API_KEY="..."。
+3. 如果你设置过 INTERN_API_BASE，先取消覆盖，使用默认地址：
+unset INTERN_API_BASE
+1. 使用低并发重新试跑：
+export LOCAL_MAX_CONCURRENCY=1
+python main.py --input_file sample_data/dev.jsonl --output_dir sample_outputs_retry
+baseline 的 llm_client.py 会自动把不带 Bearer  前缀的 Token 转成 Authorization: Bearer ...。你只需要保证环境变量中是自己的有效 Token，不要在文档或日志中暴露密钥内容。
+Token 过期
+现象可能是服务返回 token expired、A0211 token 过期、401 Unauthorized 或类似鉴权错误。
+处理方式：
+- 前往 API 控制台重新生成或获取有效 Token。
+- 在当前 shell 中重新设置 INTERN_API_KEY。
+- 删除旧失败输出目录，或指定新的 --output_dir 后重跑。
+注意：Token 通常只应由你本人保存和使用。不要把过期 Token 或新 Token 粘贴到公开文档、群聊、Issue、trace 或提交文件中。
+-20053 / 超出频率限制
+原因：请求频率或 token 用量超过当前流控。baseline 默认本地并发为 8，而当前 user_agent.py 对每道题会多次调用模型：生成多个候选，再对候选进行验证。并发和多次采样叠加后，首次运行更容易触发流控。
+处理方式：
+export LOCAL_MAX_CONCURRENCY=1
+python main.py --input_file sample_data/dev.jsonl --output_dir sample_outputs_low_concurrency
+如果你已经修改过 user_agent.py，还可以临时降低：
+- policy_sample_times：候选生成次数。
+- verifier_voting_times：验证投票次数。
+- 单次请求的 max_tokens。
+确认链路稳定后，再按实验需要逐步增加并发或调用次数。
+Python 版本相关错误
+典型现象：
+unsupported operand type(s) for |: 'type' and 'NoneType'
+或在导入 lagent、user_agent.py 时出现类型语法相关异常。
+原因：Python 版本过低，不支持依赖或 baseline 中使用的较新类型语法。
+处理方式：
+python --version
+如果低于 Python 3.10，请重新创建 Python 3.10+ 虚拟环境：
+deactivate 2>/dev/null || true
+python3.10 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+不要在 Python 3.8 环境里继续排查模型或 runner 问题，先升级运行环境。
+依赖安装失败
+常见现象：
+- No module named 'lagent'。
+- 从 GitHub 安装 lagent 失败。
+- 安装 ray 等依赖时时间过长或空间不足。
+- 系统提示 externally-managed-environment。
+处理方式：
+1. 确认已经激活虚拟环境：
+which python
+python --version
+1. 重新安装依赖：
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+1. 如果系统禁止直接安装包，使用虚拟环境或 uv venv，不要向系统 Python 强行写入依赖。
+2. 如果 GitHub 访问失败，先解决网络或代理问题，再重试安装。
+3. 如果磁盘空间不足，清理 pip 缓存或换到空间更充足的环境：
+python -m pip cache purge
+输出文件存在但 runner 跳过
+现象：
+Skip idx=0 because sample_outputs/0.json already exists.
+原因：main.py 会跳过已经存在且非空的 {idx}.json，方便中断后继续运行。
+处理方式：
+- 想复用旧结果：无需处理。
+- 想重新生成全部结果：删除旧输出目录。
+rm -rf sample_outputs
+python main.py --input_file sample_data/dev.jsonl --output_dir sample_outputs
+- 想保留旧结果并做对比：换一个新的输出目录。
+python main.py --input_file sample_data/dev.jsonl --output_dir sample_outputs_v2
+final_response 为空
+现象：输出文件中出现类似错误：
+{
+  "status": "error",
+  "final_response": "",
+  "error": {
+    "type": "ValueError",
+    "message": "agent.solve must return a non-empty string field: final_response"
+  }
+}
+原因：ReasoningAgent.solve 返回的字典中没有非空字符串字段 final_response。
+处理方式：
+确保 solve 至少返回：
+return {
+    "final_response": final_answer,
+    "trace": trace,
+}
+其中 final_answer 必须是非空字符串。不要返回数字、列表、None 或只包含中间推理的对象。
+返回结果不能写入 JSON
+现象：输出文件中 error.type 可能是 TypeError，错误信息包含 not JSON serializable。
+原因：solve 返回值或 trace 中包含不能被 json.dump 写出的对象，例如异常对象、文件句柄、模型 SDK 原始响应对象、集合、函数或自定义类实例。
+处理方式：
+- final_response 使用字符串。
+- trace 使用列表和字典。
+- 字典中的值尽量使用字符串、数字、布尔值、None、列表或普通字典。
+- 如果要记录复杂对象，先转成简短字符串摘要。
+示例：
+trace.append({
+    "step": "model_call",
+    "content": {
+        "prompt_summary": "生成候选答案",
+        "response": str(response_text),
+    },
+})
+请求超时或连续重试失败
+现象：错误信息包含 timeout、Read timed out、ConnectionError，或：
+Chat completion failed after 3 attempts
+处理方式：
+- 先用 LOCAL_MAX_CONCURRENCY=1 重跑，排除并发导致的问题。
+- 检查网络和代理是否能访问 API 服务。
+- 减少单题模型调用次数或降低 max_tokens。
+- 保留失败 JSON，查看 error.message 中最末尾的 HTTP 或网络错误。
+如果连续多次只在同一题失败，检查该题是否触发了你的提示词、解析或后处理代码中的异常。
+改完 user_agent.py 后完全没有变化
+可能原因：
+- runner 跳过了已有输出文件。
+- 你修改的代码不在 PARTICIPANT DESIGN AREA 或没有被 ReasoningAgent.solve 调用。
+- 当前 shell 使用的不是你刚安装依赖的虚拟环境。
+处理方式：
+rm -rf sample_outputs_debug
+python main.py --input_file sample_data/dev.jsonl --output_dir sample_outputs_debug
+然后检查新目录中的 JSON：
+jq '.status, .final_response, .trace[0]?' sample_outputs_debug/0.json
+如果 trace 为空或不是你预期的内容，优先检查 solve 的返回路径是否都包含你新增的记录。
+
+API 使用说明
+
+本章节说明参赛选手如何使用书生 API 完成本地调试：从获取 API Token、配置 baseline，到选择接口和模型，再到处理流控与查看使用情况。
+如果你只是想尽快跑通 baseline，先完成本页的“baseline 默认配置”，再按顺序阅读后续页面。
+推荐阅读顺序
+1. 获取密钥与安全管理：生成 API Token，并用环境变量配置到本地。
+2. 接口调用与模型选择：理解 baseline 使用的 Chat API、模型字段和 endpoint 差异。
+3. 流控申请与使用统计：控制本地并发，申请更高 RPM / TPM，并查看 Dashboard。
+官方入口
+- API 入口：https://internlm.intern-ai.org.cn/Api
+- API Docs：https://internlm.intern-ai.org.cn/api/document
+- 用户鉴权：https://internlm.intern-ai.org.cn/doc/docs/%E7%94%A8%E6%88%B7%E9%89%B4%E6%9D%83/
+- 多轮对话 API：https://internlm.intern-ai.org.cn/doc/docs/Chat/
+- 模型列表：https://internlm.intern-ai.org.cn/doc/docs/%E6%A8%A1%E5%9E%8B%E5%88%97%E8%A1%A8/
+- Claude-like API：https://internlm.intern-ai.org.cn/doc/docs/API_DOCUMENTATION_ZH/
+- 流控申请：https://internlm.intern-ai.org.cn/api/strategy
+官方页面可能随平台更新调整展示名称；涉及可用模型、额度和策略时，以 API Docs 与控制台当前显示为准。
+必须理解的概念
+概念
+含义
+在 baseline 中的位置
+API Token
+调用 API 的凭证，应只保存在本地环境变量或安全的密钥管理工具中。
+INTERN_API_KEY
+Endpoint
+实际请求地址。baseline 默认使用 OpenAI-compatible Chat API。
+INTERN_API_BASE
+Model ID
+请求体中的 model 字段，决定调用哪个模型或模型别名。
+INTERN_MODEL
+RPM
+Requests Per Minute，每分钟请求数限制。
+受本地并发和单题调用次数影响
+TPM
+Tokens Per Minute，每分钟 token 数限制。
+受输入长度、max_tokens 和输出长度影响
+Dashboard
+API 控制台中的使用统计入口。
+用于查看调用量与 token 使用量
+Baseline 默认配置
+本赛题 baseline 的 challenger_agent_baseline/llm_client.py 默认使用 OpenAI-compatible Chat API：
+export INTERN_API_KEY="YOUR_API_TOKEN"
+export INTERN_API_BASE="https://chat.intern-ai.org.cn/api/v1/chat/completions"
+export INTERN_MODEL="intern-s2-preview"
+其中：
+- INTERN_API_KEY 必填。建议只填写 API Token 本体，不要把它写入代码、README、提交包或截图。
+- INTERN_API_BASE 可不设置；不设置时 baseline 使用默认 endpoint。
+- INTERN_MODEL 可不设置；不设置时 baseline 使用 intern-s2-preview。
+- llm_client.py 会把 token 组织成 Authorization: Bearer YOUR_API_TOKEN 请求头。
+- LOCAL_MAX_CONCURRENCY 由本地 runner 读取，用于控制同时处理的题目数量；首次调试建议设为 1。
+接口选择建议
+接口类型
+Endpoint
+鉴权方式
+适用说明
+OpenAI-compatible Chat API
+https://chat.intern-ai.org.cn/api/v1/chat/completions
+Authorization: Bearer YOUR_API_TOKEN
+baseline 默认使用，返回结构按 Chat Completions 的 choices 解析。
+Claude-like API
+https://chat.intern-ai.org.cn/v1/messages
+x-api-key: YOUR_API_TOKEN
+请求和响应结构不同；如果改用该接口，需要同步改写 client 逻辑。
+参赛者优先使用 baseline 已接入的 OpenAI-compatible Chat API。不要只把 INTERN_API_BASE 改成 Claude-like endpoint，否则现有 llm_client.py 的鉴权头和返回解析都会不匹配。
+使用前检查
+- 已能登录 API 控制台，并在 Tokens 页面创建自己的 API Token。
+- 本地 shell 中已设置 INTERN_API_KEY，新开终端后需要重新设置或使用本地密钥管理工具加载。
+- 首次运行时将 LOCAL_MAX_CONCURRENCY 设为 1，确认逻辑正确后再逐步提高。
+- 每次更换模型、并发、采样次数或 max_tokens 后，在 Dashboard 中观察调用量和 token 使用量变化。
+
+获取密钥与安全管理
+
+API Token 是调用书生 API 的凭证。请把它当作密码处理：只在本地安全环境中使用，不写入代码，不提交到仓库，也不发布到飞书文档、截图或讨论区。
+获取 API Token
+1. 打开 API 入口：https://internlm.intern-ai.org.cn/Api
+2. 使用参赛时绑定的账号或个人账号登录。
+3. 进入 API 控制台，在 Tokens 页面创建新的 API Token。
+4. 创建后立即复制并保存到本地安全位置。不要把 token 粘贴到公开文档、聊天记录或代码注释中。
+5. 如果有多台机器或多个实验用途，建议分别创建 token，便于后续撤销和排查异常调用。
+如果控制台入口、按钮名称或展示顺序发生变化，以 API Docs 和控制台当前页面为准：
+- API Docs：https://internlm.intern-ai.org.cn/api/document
+- 用户鉴权：https://internlm.intern-ai.org.cn/doc/docs/%E7%94%A8%E6%88%B7%E9%89%B4%E6%9D%83/
+配置到 baseline
+在运行本地 baseline 前，进入 challenger_agent_baseline 目录，并在当前 shell 中设置环境变量：
+cd challenger_agent_baseline
+export INTERN_API_KEY="YOUR_API_TOKEN"
+INTERN_API_KEY 建议填写 token 本体。baseline 的 llm_client.py 会自动生成请求头：
+Authorization: Bearer YOUR_API_TOKEN
+如需显式覆盖默认 endpoint 或模型，可以继续设置：
+export INTERN_API_BASE="https://chat.intern-ai.org.cn/api/v1/chat/completions"
+export INTERN_MODEL="intern-s2-preview"
+首次调试建议把本地并发降到 1，避免代码还未验证时触发流控：
+export LOCAL_MAX_CONCURRENCY=1
+以上 export 只对当前终端会话生效。新开终端后需要重新设置，或使用你自己的本地环境变量管理方式加载。无论使用哪种方式，都不要把包含 token 的文件提交到仓库或提交包。
+直接调用 API 时的鉴权头
+如果你绕过 baseline，直接用 curl、requests 或其他 SDK 调用 OpenAI-compatible Chat API，需要自己设置鉴权头：
+curl -X POST "https://chat.intern-ai.org.cn/api/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${INTERN_API_KEY}" \
+  -d '{
+    "model": "intern-s2-preview",
+    "messages": [
+      {"role": "user", "content": "请用一句话说明本接口是否可用。"}
+    ],
+    "temperature": 0.2,
+    "max_tokens": 128
+  }'
+Claude-like API 使用不同鉴权头 x-api-key，不能复用上面的 Authorization 写法。两类接口的差异见 接口调用与模型选择。
+安全管理清单
+- 不要把 API Token 写入 user_agent.py、llm_client.py、README、Notebook、日志、截图或提交包。
+- 不要把 token 放进浏览器端代码或会被公开访问的配置文件。
+- 不要在 trace、异常信息或调试输出中打印完整 token。
+- 不要把 token 发到飞书群、issue、论坛或公开答疑文档。
+- 如果使用 .env、direnv 或 shell profile 管理本地变量，确认相关文件不会进入提交包。
+- 为不同用途拆分 token，便于在发现异常时只撤销受影响的凭证。
+泄露或失效后的处理
+如果你怀疑 token 已泄露，或发现 Dashboard 中出现异常调用量：
+1. 立即进入 API 控制台的 Tokens 页面撤销或删除相关 token。
+2. 创建新的 token，并只更新本地环境变量。
+3. 检查最近提交、日志、截图、压缩包和飞书文档，确认没有继续暴露旧 token。
+4. 重新运行本地样例，确认新 token 可用。
+如果接口返回鉴权失败、token 过期或业务不匹配等错误，优先检查：
+- INTERN_API_KEY 是否已经在当前终端设置。
+- 调用 OpenAI-compatible Chat API 时是否使用 Authorization: Bearer ...。
+- 是否把 Claude-like API 的 x-api-key 写法误用于 Chat API，或反过来使用。
+- endpoint 是否为当前接口文档中对应的地址。
+- token 是否来自当前 API 控制台账号和服务。
+
+接口调用与模型选择
+
+本页说明本赛题 baseline 如何调用书生 API，以及在调整模型、endpoint 或请求参数时需要注意什么。
+Baseline 使用的接口
+baseline 的 challenger_agent_baseline/llm_client.py 默认调用 OpenAI-compatible Chat API：
+POST https://chat.intern-ai.org.cn/api/v1/chat/completions
+Authorization: Bearer YOUR_API_TOKEN
+Content-Type: application/json
+对应的环境变量如下：
+环境变量
+是否必填
+默认值
+作用
+INTERN_API_KEY
+是
+无
+API Token。llm_client.py 会组织为 Authorization: Bearer ...。
+INTERN_API_BASE
+否
+https://chat.intern-ai.org.cn/api/v1/chat/completions
+请求 endpoint。
+INTERN_MODEL
+否
+intern-s2-preview
+请求体中的 model 字段。
+最小可用配置：
+export INTERN_API_KEY="YOUR_API_TOKEN"
+如需固定 endpoint 和模型：
+export INTERN_API_BASE="https://chat.intern-ai.org.cn/api/v1/chat/completions"
+export INTERN_MODEL="intern-s2-preview"
+请求体字段
+baseline 的 InternChatClient.chat(messages, temperature, max_tokens) 会发送如下字段：
+字段
+baseline 来源
+说明
+model
+INTERN_MODEL
+模型 ID 或模型别名。
+messages
+ReasoningAgent 组织的对话消息
+通常包含 system / user 等角色消息。
+temperature
+AgentConfig.policy_temperature 或 verifier_temperature
+控制采样随机性。验证器建议使用较低值。
+max_tokens
+AgentConfig.max_tokens 或验证器固定值
+控制单次输出上限；过大可能增加 token 消耗和等待时间。
+API Docs 中还可能列出 top_p、stream、tools、thinking_mode 等字段。baseline 默认没有使用这些字段；如果自行添加，请同时记录实验参数，并以官方 API Docs 当前说明为准。
+最小请求示例
+直接调用 Chat API 时，可以用下面的请求验证 token、endpoint 和模型是否可用：
+curl -X POST "https://chat.intern-ai.org.cn/api/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${INTERN_API_KEY}" \
+  -d '{
+    "model": "intern-s2-preview",
+    "messages": [
+      {"role": "user", "content": "请回复：API 调用成功。"}
+    ],
+    "temperature": 0.2,
+    "max_tokens": 64
+  }'
+Chat Completions 的返回内容由 baseline 按以下路径读取：
+choices[0].message.content
+如果你修改 client，请保持返回值最终能交给 ReasoningAgent 使用，并避免把完整请求头或 token 写入日志。
+模型选择
+baseline 默认模型是：
+intern-s2-preview
+官方文档中还提供 intern-latest 作为指向最新 Intern 系列模型的别名。选择模型时建议遵循以下原则：
+- 需要稳定复现实验结果时，优先使用明确的模型 ID，例如 baseline 默认的 intern-s2-preview。
+- 希望跟随官方最新 Intern 系列模型时，可以按文档使用 intern-latest，但需要记录当次实验日期、模型别名和关键参数。
+- 更换模型后，重新做小样本验证，再扩大并发或数据规模。
+- 可用模型、别名含义和参数支持范围以模型列表和 API Docs 当前说明为准。
+模型列表入口：
+- https://internlm.intern-ai.org.cn/doc/docs/%E6%A8%A1%E5%9E%8B%E5%88%97%E8%A1%A8/
+OpenAI-compatible 与 Claude-like API 的区别
+项目
+OpenAI-compatible Chat API
+Claude-like API
+Endpoint
+https://chat.intern-ai.org.cn/api/v1/chat/completions
+https://chat.intern-ai.org.cn/v1/messages
+鉴权头
+Authorization: Bearer YOUR_API_TOKEN
+x-api-key: YOUR_API_TOKEN
+baseline 是否默认使用
+是
+否
+返回解析
+choices[0].message.content
+content 数组，结构不同
+不要只把 INTERN_API_BASE 改成 https://chat.intern-ai.org.cn/v1/messages。Claude-like API 的鉴权头、请求体和响应结构都不同；如需使用，需要改写 llm_client.py 的请求头、payload 和返回解析。
+Claude-like API 文档入口：
+- https://internlm.intern-ai.org.cn/doc/docs/API_DOCUMENTATION_ZH/
+调试检查表
+- endpoint 是否与所选接口类型一致。
+- 鉴权头是否与所选接口类型一致。
+- model 是否为当前文档中可用的模型 ID 或别名。
+- messages 是否是接口要求的数组结构。
+- max_tokens 是否过大，导致响应慢、超时或 token 消耗异常。
+- 报错时先用低并发、短输入、低 max_tokens 的最小请求复现，再回到完整 agent 流程排查。
+
+流控申请与使用统计
+
+流控会直接影响本地实验的速度和稳定性。参赛者应先用低并发确认代码正确，再根据实验规模申请更高 RPM / TPM，并通过 Dashboard 观察调用量和 token 使用量。
+流控指标
+指标
+含义
+常见影响因素
+RPM
+Requests Per Minute，每分钟请求数限制。
+本地并发、单题模型调用次数、重试次数。
+TPM
+Tokens Per Minute，每分钟 token 数限制。
+输入题目长度、提示词长度、max_tokens、实际输出长度。
+并发数
+本地同时处理的题目数量。
+LOCAL_MAX_CONCURRENCY。
+单题调用次数
+每道题触发的模型请求数量。
+候选生成次数、验证次数、工具调用或自定义反思流程。
+RPM 和 TPM 是两个不同限制：请求次数不高时，也可能因为单次输入输出较长触发 TPM；输出较短时，也可能因为并发过高触发 RPM。
+Baseline 的请求量来源
+baseline 的 ReasoningAgent 默认配置在 user_agent.py 中：
+policy_sample_times = 3
+verifier_voting_times = 2
+默认流程是：
+1. 每题生成 policy_sample_times 个候选答案。
+2. 对每个候选答案调用验证器 verifier_voting_times 次。
+3. 选择置信度最高的候选作为 final_response。
+因此默认每题模型调用次数约为：
+3 + 3 * 2 = 9
+更一般地：
+每题调用次数 = policy_sample_times + policy_sample_times * verifier_voting_times
+如果输入有 N 道题，默认至少会产生约 9 * N 次模型调用；网络错误或服务端错误触发重试时，实际请求数可能更多。选手自行加入多轮反思、工具调用、投票或重试逻辑后，也需要重新估算。
+首次运行建议
+首次跑通样例时，先把并发降到最低：
+export LOCAL_MAX_CONCURRENCY=1
+建议按以下顺序扩大实验：
+1. 用 1 到 3 道样例题确认输出结构正确。
+2. 保持 LOCAL_MAX_CONCURRENCY=1，增加题目数量，观察是否有超时或异常消耗。
+3. 小幅提高并发，例如从 1 调到 2 或 4。
+4. 如果触发频率限制，先降低并发、减少采样次数或验证次数，再评估是否需要申请更高流控。
+降低调用压力的常用方式：
+- 降低 LOCAL_MAX_CONCURRENCY。
+- 降低 policy_sample_times 或 verifier_voting_times。
+- 降低 max_tokens，尤其是验证器这类短输出场景。
+- 缩短提示词和 trace 中会再次送入模型的内容。
+- 对可恢复错误使用有限重试，避免无限循环重复请求。
+申请更高流控
+当本地逻辑已经验证正确，但实验规模确实需要更高 RPM / TPM 时，可以提交流控申请：
+1. 打开流控申请页面：https://internlm.intern-ai.org.cn/api/strategy
+2. 按页面要求填写账号、用途、期望额度等信息。
+3. 用途中说明与“挑战杯”参赛实验相关。
+4. 尽量给出可复核的估算依据，例如题目数量、每题调用次数、并发数、预计运行时间。
+5. 提交后等待审批和额度生效；具体审批规则以平台当前说明为准。
+申请前建议先准备一份简短估算：
+预计请求数 = 题目数量 * 每题调用次数
+并发需求 = LOCAL_MAX_CONCURRENCY
+主要模型 = INTERN_MODEL
+单次输出上限 = max_tokens
+不要为了申请更高流控而夸大并发需求。过高并发会增加排查难度，也可能放大代码中的重复请求或死循环问题。
+查看使用情况
+API 控制台提供 Dashboard，可用于查看调用量和 token 使用量：
+- API 入口：https://internlm.intern-ai.org.cn/Api
+- API Docs：https://internlm.intern-ai.org.cn/api/document
+建议在以下节点查看 Dashboard：
+- 首次跑通样例后，确认调用量与预期接近。
+- 调整 policy_sample_times、verifier_voting_times、LOCAL_MAX_CONCURRENCY 或 max_tokens 后，观察增量变化。
+- 大批量运行前，先用小批量估算单位题目消耗。
+- 大批量运行中，定期确认没有异常增长。
+如果调用量或 token 使用量明显高于预期，优先检查：
+- 是否有异常重试、死循环或重复提交同一题。
+- 输出目录中已有结果是否被正确跳过。
+- max_tokens 是否设置过高。
+- prompt 或 trace 是否不断累积，并被再次送入模型。
+- 是否有多个终端、脚本或机器同时使用同一个 token。
+常见问题处理
+现象
+处理建议
+触发频率限制
+降低 LOCAL_MAX_CONCURRENCY，减少采样和验证次数；确有需要再申请更高 RPM / TPM。
+请求超时
+降低 max_tokens，缩短提示词，减少单次上下文体积，并检查网络稳定性。
+结果被截断
+在确认输出确实需要更长时适当提高 max_tokens，同时控制 trace 体积。
+token 消耗异常
+停止批量任务，查看 Dashboard，并检查重复请求、循环逻辑和并发脚本。
+正式提交评测时，平台会使用官方评测流程；本页主要用于参赛者本地调试和实验阶段的 API 使用管理。
+
+提交评测与说明
+
+本页说明正式评测时平台会加载什么、调用什么，以及选手提交代码时需要守住哪些边界。请先把本页读完，再根据后续页面检查提交包结构、接口返回格式和本地自测结果。
+核心结论
+正式评测只依赖选手提交代码中约定的智能体入口：
+- 提交根目录必须包含 user_agent.py。
+- user_agent.py 必须暴露 ReasoningAgent 类。
+- ReasoningAgent 的构造函数必须接受 client 参数，平台会以 ReasoningAgent(client=official_client) 的方式初始化。
+- ReasoningAgent.solve(problem: str, metadata: dict) -> dict 必须可被调用。
+- solve 必须返回 dict，并包含非空字符串字段 final_response。
+- 推荐同时返回 trace，用于记录关键推理步骤、模型调用摘要、候选答案、验证过程和异常排查线索。
+最终评测主要依据 final_response 的答案正确性。trace 是推荐的诊断与设计参考信息，不能替代 final_response，也不要把敏感信息写入 trace。
+本地样例与正式评测的区别
+baseline 中的 main.py 和 llm_client.py 用于帮助选手在本地跑通样例数据：
+- llm_client.py 是本地样例 API client，便于理解如何调用书生 API。
+- main.py 是本地样例 runner，负责读取样例 JSONL、调用 ReasoningAgent.solve、写出结果 JSON。
+- sample_data/dev.jsonl 是本地调试样例，可能包含用于对照调试的字段。
+正式评测不会使用选手提交的 main.py 或 llm_client.py 作为评测入口。平台会加载选手提交的 user_agent.py，使用官方 client 初始化 ReasoningAgent，再由官方 runner 调用 solve(problem, metadata)。
+因此，选手可以修改或替换本地调试脚本，但不能改变正式评测需要的入口契约。只要 user_agent.py 与相关依赖满足规范，本地 runner 的具体实现方式不会影响平台调用边界。
+官方评测会补充什么
+正式评测环境会在不改变选手智能体接口的前提下，补充本地样例脚本中未完整覆盖的平台能力。可能包括：
+- 隐藏测试集读取与题目 metadata 注入。
+- 官方 API client、鉴权、请求重试、超时控制、限流管理和 token 统计。
+- 并发调度、资源隔离、单题超时和全局运行控制。
+- 返回值结构校验、JSON 序列化校验和错误归一化。
+- trace 收集、截断、脱敏、存储和展示。
+- 官方 judger 对接、结果汇总和榜单写入。
+这些能力由平台统一处理。选手代码只需要实现清晰、稳定、可导入的智能体逻辑，不需要在提交包中实现正式评测系统。
+不要依赖的内容
+为了保证代码能在平台环境中稳定运行，请避免以下依赖：
+- 不依赖本地机器的绝对路径，例如 /home/...、/Users/... 或某个个人目录。
+- 不依赖未提交到仓库中的隐藏文件、缓存文件、临时输出或私有配置。
+- 不依赖样例数据中的 answer 字段；正式评测不会向 solve 传入标准答案。
+- 不依赖题目固定顺序，也不要假设 idx 连续或从 0 开始。
+- 不依赖多个题目一定在同一个进程、同一个线程或同一个 ReasoningAgent 实例中运行。
+- 不依赖选手自己的 main.py 或 llm_client.py 会在正式评测中被使用。
+- 不依赖官方 client 的内部私有字段，只使用约定的调用方式组织模型请求。
+推荐阅读顺序
+如果你正在准备提交，建议按以下顺序检查：
+1. 提交包结构与依赖规范
+2. ReasoningAgent 接口与返回格式
+3. 官方 Client 与 Runner 说明
+4. 提交前自检清单
+完成以上检查后，再进行正式提交或申请评测。这样可以优先排除入口缺失、依赖未声明、返回格式错误和敏感信息泄露等低级失败。
+
+提交包结构与依赖规范
+
+本页说明选手提交仓库或压缩包时需要包含哪些文件、依赖应如何声明，以及哪些内容不应进入提交包。正式评测环境会从提交根目录加载代码，请保持目录结构清晰、依赖可安装、入口可导入。
+必须文件
+提交根目录必须包含：
+user_agent.py
+user_agent.py 中必须提供 ReasoningAgent 类，并支持平台按如下方式初始化和调用：
+class ReasoningAgent:
+    def __init__(self, client, *args, **kwargs):
+        ...
+
+    def solve(self, problem: str, metadata: dict) -> dict:
+        ...
+最低要求是：
+- ReasoningAgent 可以从 user_agent.py 正常导入。
+- __init__ 至少接受 client 参数。
+- solve(problem, metadata) 可以被调用并返回 dict。
+- 返回值包含非空字符串字段 final_response。
+如果入口文件、类名或方法名不符合以上约定，平台无法完成正式评测。
+可选文件和目录
+选手可以按方案需要添加辅助文件，例如：
+requirements.txt
+tools/
+prompts/
+utils/
+data/
+常见用途包括：
+- tools/：放置可复用的解析、验证、后处理或工具调用代码。
+- prompts/：放置提示词模板，便于版本管理。
+- utils/：放置通用函数、JSON 处理、答案抽取等辅助逻辑。
+- data/：放置随提交包一起提供的小型静态资源。
+所有新增文件都应通过相对路径读取。推荐基于 __file__ 或当前模块所在目录定位资源，不要写死个人机器路径。请确保正式运行所需的所有自定义模块、模板和小型资源都已包含在提交包内。
+依赖声明
+Python 依赖应写入提交根目录的 requirements.txt，或赛事另行指定的依赖说明文件。建议遵守以下规则：
+- 写明代码实际需要的第三方包，避免只在本机安装但未声明。
+- 对关键依赖固定合理版本，例如 package==x.y.z 或使用兼容范围。
+- 避免加入体积极大但未实际使用的依赖，以免安装超时或环境冲突。
+- 避免依赖需要额外系统服务的组件，例如本地数据库、常驻后台服务或手动启动的外部进程。
+- 如果使用可选工具库，请在代码中做好缺失时的清晰报错或降级处理。
+正式评测会在隔离环境中安装依赖。只在个人电脑上可用、但没有写入依赖文件或提交包的内容，不能视为正式评测可用。
+禁止提交的内容
+提交包中不得包含以下内容：
+- API key、访问令牌、账号密码、Cookie 或其它凭证。
+- 隐藏测试集、标准答案、judger 信息或尝试构造这些信息的代码。
+- 恶意代码、破坏性命令、扫描平台环境或规避资源限制的逻辑。
+- 与赛题无关的大文件、虚拟环境目录、缓存目录、临时输出和日志。
+- 个人隐私信息、内部链接、未脱敏的调试记录。
+如果需要在本地使用密钥，请通过环境变量或本地未提交的配置文件管理。提交前务必检查代码、注释、文档、日志和输出目录，避免把凭证或敏感信息打包。
+提交前本地检查
+正式提交前，建议至少完成一次干净环境检查：
+1. 新建虚拟环境或容器环境。
+2. 从提交包或目标 commit 重新安装依赖。
+3. 运行本地样例数据，确认 user_agent.py 可以导入。
+4. 检查每道题输出的 JSON 是否可序列化。
+5. 确认 final_response 是非空字符串。
+6. 确认 trace 如存在，不包含密钥、隐私或大段无关日志。
+7. 删除本地虚拟环境、缓存目录、临时输出、调试日志和未使用的大文件。
+这一步的目标不是验证隐藏测试集表现，而是确认提交包在脱离个人电脑环境后仍能安装、导入和运行。
+
+ReasoningAgent 接口与返回格式
+正式评测平台通过固定接口调用选手代码。本页明确 ReasoningAgent 的初始化方式、solve 输入参数、返回字段和常见错误。请把这里的接口契约视为提交代码必须满足的最低要求。
+初始化接口
+平台会从提交根目录的 user_agent.py 中导入 ReasoningAgent，并传入官方 client：
+from user_agent import ReasoningAgent
+
+agent = ReasoningAgent(client=official_client)
+因此，构造函数至少需要接受 client：
+class ReasoningAgent:
+    def __init__(self, client, *args, **kwargs):
+        self.client = client
+初始化阶段建议只完成轻量、确定性的准备工作，例如保存 client、加载随提交包提供的提示词模板、初始化小型配置。请避免在初始化阶段执行以下操作：
+- 读取隐藏数据、标准答案或平台内部文件。
+- 访问本地个人路径或未提交的私有配置。
+- 执行耗时很长或不稳定的外部请求。
+- 假设所有题目都会复用同一个进程、线程或 agent 实例。
+推理接口
+ReasoningAgent 必须提供：
+def solve(self, problem: str, metadata: dict) -> dict:
+    ...
+参数含义：
+- problem：数学题题面文本。
+- metadata：题目元信息字典，可能包含 idx 等平台注入字段。
+使用建议：
+- 可以使用 metadata.get("idx") 标记日志或 trace，但不要依赖 idx 连续、固定或从 0 开始。
+- 不要读取或依赖 metadata["answer"]。样例数据中可能出现 answer 方便本地对照，正式评测不会向 solve 提供标准答案。
+- 单题求解逻辑应尽量自洽，不要依赖前一题的运行结果或题目顺序。
+- 遇到可恢复的模型调用异常时，可以在内部重试或记录诊断信息；最终仍需返回符合格式的结果，或让异常被平台 runner 捕获并归一化。
+必须返回字段
+solve 必须返回 dict，且必须包含非空字符串字段 final_response：
+{
+  "final_response": "最终答案"
+}
+final_response 要求：
+- 类型必须是 str。
+- 去除空白后不能为空。
+- 内容应是面向判分的最终答案，而不是完整日志、Python 对象或异常堆栈。
+- 建议在内部完成答案抽取和格式化，避免把冗长推理过程直接作为最终答案。
+正式评测主要依据 final_response 的答案正确性。请确保它表达清晰、格式稳定，并且不依赖人工再解释。
+推荐返回字段：trace
+推荐同时返回 trace，用于记录智能体的关键推理和诊断信息：
+{
+  "final_response": "最终答案",
+  "trace": [
+    {"step": "plan", "content": "识别题型并制定解题策略"},
+    {"step": "model_call", "content": "生成候选答案摘要"},
+    {"step": "verify", "content": "检查候选答案并选择最终结果"}
+  ]
+}
+trace 建议：
+- 使用列表或简单字典结构，确保可以 JSON 序列化。
+- 记录关键策略、中间结果、模型调用摘要、候选答案、验证过程和错误排查线索。
+- 控制体积，避免写入完整无关日志、超长原始响应或大量重复内容。
+- 不要包含 API key、访问令牌、个人隐私、平台内部信息或其它敏感内容。
+trace 是推荐的诊断与设计参考信息。它有助于定位错误、展示方案思路和理解异常，但不能替代 final_response。
+JSON 序列化要求
+返回值需要能被标准 JSON 工具序列化。以下对象不应直接放入返回值：
+- Python 函数、类、异常对象、文件句柄、模型 client、生成器。
+- set、bytes、Path、datetime 等未转换的对象。
+- NumPy、Pandas、SymPy 等库中的复杂对象，除非已转成字符串、数字、列表或字典。
+如果需要记录异常，请转成简单结构：
+{
+  "step": "error",
+  "content": {
+    "type": "TimeoutError",
+    "message": "model request timed out"
+  }
+}
+常见错误
+提交前请重点排查：
+- user_agent.py 中没有 ReasoningAgent。
+- ReasoningAgent.__init__ 不接受 client。
+- solve 返回非 dict。
+- final_response 缺失、为空或不是字符串。
+- trace 中包含不可 JSON 序列化对象。
+- 代码从样例数据读取 answer 作为答案来源。
+- 对 metadata 字段做过强假设，导致隐藏测试环境中抛错。
+- 在返回值、日志或 trace 中泄露密钥、访问令牌或个人路径。
+只要以上接口稳定，选手可以自由设计内部推理策略、提示词、工具调用、候选生成与验证流程。
+
+官方 Client 与 Runner 说明
+
+baseline 中的 llm_client.py 和 main.py 是本地调试工具，不是正式评测系统。本页说明它们与官方 client、官方 runner 的关系，帮助选手明确哪些接口可以依赖，哪些本地实现细节不能依赖。
+baseline 中的本地组件
+baseline 提供两个本地组件，目的是让选手快速理解调用链路：
+- llm_client.py：本地样例 API client，读取环境变量并调用书生 API。
+- main.py：本地样例 runner，读取样例数据、初始化 ReasoningAgent、调用 solve、写出每题结果。
+它们适合用于本地自测、定位接口问题和理解输出格式。选手可以基于它们调试自己的方案，也可以编写额外脚本进行实验。
+请注意：本地组件的实现细节不是正式评测承诺。正式评测只承诺按约定加载 user_agent.py、初始化 ReasoningAgent 并调用 solve(problem, metadata)。
+正式评测的调用边界
+正式评测不会依赖选手提交的本地 client 或 runner。平台会按类似流程执行：
+1. 拉取或解压选手提交代码。
+2. 安装提交包声明的依赖。
+3. 从 user_agent.py 导入 ReasoningAgent。
+4. 使用官方 client 初始化：ReasoningAgent(client=official_client)。
+5. 读取隐藏测试题，构造 problem 和 metadata。
+6. 使用官方 runner 调用：agent.solve(problem, metadata)。
+7. 校验返回值，收集 final_response、trace、异常信息和运行统计。
+选手提交包可以包含 main.py、llm_client.py 或其它本地调试文件，但不能假设这些文件会被正式评测系统调用。
+官方 client 可能补充的能力
+官方 client 会在平台侧统一管理模型访问。相较本地样例 client，正式评测中的 client 可能补充：
+- 统一鉴权和模型访问策略。
+- 请求重试、退避、超时控制。
+- RPM / TPM 流控管理。
+- token 使用统计和资源记录。
+- 错误码归一化。
+- 敏感信息脱敏。
+选手代码应只依赖公开约定的调用方式，例如使用 client.chat(messages, temperature, max_tokens) 组织模型请求。不要读取 client 的内部属性，不要修改 client 的鉴权信息，也不要假设正式 client 与本地样例类拥有完全相同的私有实现。
+示例：
+response = self.client.chat(
+    messages=[
+        {"role": "user", "content": problem},
+    ],
+    temperature=0.2,
+    max_tokens=4096,
+)
+官方 runner 可能补充的能力
+官方 runner 会在平台侧统一管理题目、运行环境和输出校验。相较本地样例 runner，正式评测中的 runner 可能补充：
+- 隐藏测试集加载与 metadata 注入。
+- 多进程或多线程调度。
+- 单题超时、全局超时和资源隔离。
+- 输出 schema 校验与 JSON 序列化校验。
+- 异常捕获、状态记录和错误归一化。
+- trace 截断、脱敏、收集和展示。
+- 评测结果收集、官方 judger 对接和榜单数据写入。
+这些能力不要求选手自行实现。选手需要保证自己的 solve 在单题输入下能稳定返回规范结果，并且不会依赖本地 runner 的私有行为。
+对选手代码的实际要求
+请按以下原则编写提交代码：
+- 保持 ReasoningAgent 和 solve 的接口契约不变。
+- 将复杂推理逻辑封装在 user_agent.py 或随提交包一起提供的辅助模块中。
+- 使用相对路径读取随包资源，不读取个人电脑上的绝对路径。
+- 不假设正式 client 暴露本地样例 client 的内部字段。
+- 不假设正式 runner 会按固定顺序、固定并发方式或固定进程模型调用题目。
+- 不从样例数据、输出目录或本地缓存中读取标准答案。
+- 在本地样例上确认 final_response 非空、返回值可 JSON 序列化、trace 不含敏感信息。
+本地跑通是正式提交的必要准备，但不是正式评测环境的完整复制。请以本系列文档中的入口契约作为最终提交标准。
+
+提交前自检清单
+
+正式提交前，请使用本页逐项检查。建议在干净环境中从提交包或目标 commit 重新安装依赖并运行样例，避免把个人电脑上的隐藏依赖、路径或临时文件误认为评测环境可用。
+文件结构
+[] 提交根目录包含 user_agent.py。
+[] user_agent.py 可以被 Python 正常导入。
+[] user_agent.py 中包含 ReasoningAgent 类。
+[] ReasoningAgent.__init__ 至少接受 client 参数。
+[] ReasoningAgent.solve(problem, metadata) 可被调用。
+[] 运行所需的辅助模块、提示词模板和小型资源已随提交包提供。
+[] 新增模块和资源均通过相对路径访问，没有写死个人机器路径。
+依赖与环境
+[] 已在干净虚拟环境或容器环境中安装 requirements.txt。
+[] 第三方 Python 依赖已完整声明，没有只在本机存在但未写入依赖文件的包。
+[] 关键依赖版本已合理固定，避免因版本漂移导致导入失败。
+[] 未依赖需要手动启动的本地数据库、后台服务或外部进程。
+[] 提交包中没有虚拟环境目录、缓存目录、临时输出、大型无关文件。
+返回格式
+[] solve 返回值是 dict。
+[] 返回值包含 final_response。
+[] final_response 是非空字符串。
+[] final_response 是清晰的最终答案，不是完整调试日志或异常堆栈。
+[] trace 如存在，是可 JSON 序列化的列表或简单字典结构。
+[] 返回值中没有异常对象、文件句柄、模型 client、函数、类、生成器等不可序列化对象。
+[] NumPy、Pandas、SymPy、Path、datetime 等对象如需返回，已转换为字符串、数字、列表或字典。
+本地运行
+[] 已设置本地调试所需的 API 环境变量。
+[] 已使用 sample_data/dev.jsonl 或等价样例完成一次完整运行。
+[] 输出文件全部生成。
+[] 每个成功样例的 status 为 success。
+[] 每个成功样例都包含非空 final_response。
+[] 本地失败样例的错误信息可诊断，且不会泄露密钥或隐私。
+[] 本地运行不依赖题目固定顺序或多个题目共用同一进程。
+安全检查
+[] 代码中没有 API key、访问令牌、账号密码、Cookie 或其它凭证。
+[] 文档、注释、提示词模板和配置样例中没有真实凭证。
+[] 输出目录、日志、trace 和异常信息中没有敏感信息。
+[] 没有提交隐藏测试集、标准答案、judger 信息或尝试构造这些信息的代码。
+[] 没有恶意代码、破坏性命令、扫描平台环境或规避资源限制的逻辑。
+[] 没有提交个人隐私信息、内部链接或未脱敏调试记录。
+评测兼容
+[] 不依赖样例数据中的 answer 字段。
+[] 不依赖题目固定顺序、固定 idx 或固定并发方式。
+[] 不依赖本地绝对路径、未提交文件、本地缓存或临时输出。
+[] 不依赖选手自己的 main.py 或 llm_client.py 被正式评测调用。
+[] 不读取或修改官方 client 的内部私有字段。
+[] 遇到模型调用错误时，能返回可诊断的 trace 或让异常被平台 runner 捕获。
+[] 已确认 final_response 是面向判分的最终答案，trace 仅作为诊断与设计参考。
+完成以上检查后，再提交正式评测。若某一项无法确认，请优先在本地修复，而不是把问题留到正式评测环境中暴露。
+
+FAQ 与答疑沉淀
+
+一、赛事相关
+如报名、组队、提交作品等参赛流程相关
+Q：初赛最晚什么时候提交？决赛是什么时候？
+A：初赛最晚提交时间是2026年9月4日（如有变动会在社群内通知），建议大家提前1周提交，以免遇到同期提交人数太多而提交失败的问题。决赛是26年11月份（具体日期请关注后续社群内通知）
+
+Q：已经毕业的学生可以参加挑战杯吗？
+A：不行。但全日制的毕业班学生可以参赛。
+
+Q：是否可以跨学校组队？
+A：可以。但是需要确定一所参赛申报主体学校，只能从一所学校申报。但是跨校，盖章、证明、公示，都是两边学校都要一起配合来弄，非常繁琐。万一获奖，实体证书只发给申报主体学校。
+
+Q：学校没有团委，在报名表上可以盖院系的公章吗？
+A：原则上不可以用院系替代的。因为校团委是校级的竞赛组委会办公室所在部门，可以用校级学工部门、双创部门、教务部门的章替代，并同时补充情况说明，说明他们学校没有团委
+
+Q：同学反馈学校不愿意给他们盖章，是否可以在资格审批的环节中通过提供学籍证明代替学校盖章来参赛？
+A：不行。
+
+Q：是否只能是持有中国国籍的学生才能报名？
+A：是的。学生赛道的参赛学生必须具有中国学籍且在读。
+
+Q：比赛全流程
+A：赛程安排如下
+暂时无法在飞书文档外展示此内容
+
+二、赛题相关
+如数据集、Baseline、模型选择等赛题详情相关
+Q：您好，我注意到baseline的默认模型是 intern-s2-preview，然后官方文件的题目介绍是：本赛题旨在探索基于Intern-S1 模型的API 构建数学智能体在自主解题、推理解释与学习启发方面的能力。
+所以在选择模型型号上面需要明确一下，是否我们这次比赛只能使用Intern-S1模型？
+A：使用 Intern-S 系列模型均可，目前最新的系列是 Intern-S2-Preview，所以我们推荐使用这个。后续如果有新的 S 系列模型也可以使用新的，一般越新数学能力越强。
+Intern-S 系列模型见https://github.com/InternLM/Intern-S1
+
+Q：我看目前发布的文件和资料上，没有提到答题过程所耗费的时间问题，这意味着智能体答题时间是没有限制的吗？
+A: 我们会在 runner 层面设置每题的超时时间的，不过尽量会让智能体回答完，只是为了规避异常。后续会在赛题中补充
+
+Q:可以使用模型的思考模式吗？
+A: 可以
+
+Q:我在现有发出的文档中只看到了3道样例的题目，请问除了这三道会还有其他的样例来用于本地调试和效果测试吗？
+A: 可以参考 baseline 代码库中的样例，暂时只会提供这些样例，后续会继续补充 samples 只用于将系统走通。后续如果需要看实际智能体的表现，可以向我们提交评测。
+
+Q:判分系统的实时排名会每天公开吗？
+A: 会的，但自动评测系统上线前，不会做到按天，上线后实时公开。 
+
+Q:文档中体提到的三个模型都可以随意搭配使用吗，还是说只能选定一个使用？
+A: Intern-S 系列模型，按需随意使用
+
+Q：评价作品的112道题，是要给到参赛者手里吗？报名后给吗？题中说的是涵盖了18给领域但是题中没有全部列出来？
+A：112 道题目目前会作为平台闭源 (不开放) 的评测集用来测试选手的智能体表现，搭建的时候可以按照 samples 题目跑通系统，然后提交评测。
+
+Q：代码环境是否有限制，是否能使用 docker 用于支持 sandbox
+A：会有限制，实际的代码运行是在 docker 中，所以确保你使用的 sandbox 能运行在 docker 环境中
+
+Q：具体如何确定好探究的方向，以及作品呈现形式是什么样的？
+A：可以参考初赛赛题要求，初赛只用提交代码库
+
+Q：测评是在线测评吗？
+A：暂时还没上线，7月初会上线在线评测系统和榜单
+
+Q：题型输入输出格式测试集合是否公开？模型怎么选？
+A：测试集不公开，只会给 samples
+
+Q：初赛仅允许使用一个智能体吗？
+A：完全可以使用 multi-agent/sub-agent。按照 baseline 要求写出符合运行的入口类和函数就行
+
+Q：具体是回答什么类型的问题，是推导新数学公式？对已有数学知识回答问题，类似于回答考试数学？还是对已有数学公式进行推导，解释？
+A：我们目前给出了一些 samples，可以先看 samples，您提问中的类都会涉及。
+
+Q：mcp可以使用吗，如果可以的话是本地mcp还是联网mcp
+A：可以用，但请使用本地离线 mcp，实际评测的 docker 容器是有外网访问限制的
+
+Q：初赛需要提交的材料有哪一些 (重复)
+A：初赛只用提交代码库
+
+Q：初赛是必须只能做单Agent的么 (重复)
+A：完全可以使用 multi-agent/sub-agent。按照 baseline 要求写出符合运行的入口类和函数就行
+
+Q：初赛能直接奔着多Agent去做么 (重复)
+A：完全可以使用 multi-agent/sub-agent。按照 baseline 要求写出符合运行的入口类和函数就行
+
+Q：整体的成果用什么形式展现出来 (重复)
+A：初赛只用提交代码库，决赛需要提供方案、代码库、PPT、Web Demo 等等，具体可后续参考决赛赛题要求和当前公布的赛题 outline。
+
+Q：数据集是以什么形式给出的 (重复)
+A：
+
+Q：在智能体系统的输入要求，即是否是直接上传图片进行识别，intern系列大模型是否有相关的识别功能可直接调用
+A：Intern-S 系列模型都是多模态的，不过题目都是 str 类型可以不考虑处理图片
+
+Q：基线模型是否只能采用在线文档中的提供的 lagent 工程
+A：不是，可以使用所有 Intern-S1 系列的模型，和任何你熟悉的库
+
+Q：在比赛方案中提到 notebook，想问一下具体的形式要求 (重复)
+A：初赛只提交代码库
+
+Q：初赛与总决赛中的测试题目的形式是怎样的，会不会存在混合类型的题目
+A：不会存在跨专业的题目，不过可能存在数学领域的混合题目
+
+Q：是否提供算力
+A：提供免费 Intern-S1 系列模型的 tokens
+
+Q：解题过程中如果调用外部工具，是否可以调用需要联网的外部计算服务/API呢？想了解下正式评测环境大概是怎样的：有没有GPU，运行时能不能联网，单题大概多久超时之类的。
+A：智能体运行请只依赖 API，没有 GPU 环境，不可连外网
+
+Q：最后答案判分是只对比最终答案和参考答案的数值吗？推理过程的正确性会不会有相关的评判方法？题目中是否有证明题这种解析解的题型，如果有的话这种题型答案的准确率是怎么判断呢，如果是用官方LLM judger，这个LLM是不是基于书生S系列模型的？
+A：不是只参考数值，judger 是基于 intern-s 系列的模型，会结合参考答案对证明题的解题过程进行判分
+
+Q：18 个评测的数学方向会不会公开？
+会，后续我们会整理后公开出来 (只有方向无赛题 samples)
+
+Q：如果不联网，我的一些依赖库会不会装不上？
+不会，评测环境会联网装好 requirements.txt 内的库，然后限制外网访问
+
+Q：我能在Windows里面跑吗，还是只能用文档提的MacOS，Linux，Windows wsl?
+A：
