@@ -1,0 +1,558 @@
+Published as a conference paper at ICLR 2026
+RL OF THOUGHTS: NAVIGATING LLM REASONING
+WITH INFERENCE-TIME REINFORCEMENT LEARNING
+Qianyue Hao∗
+, Sibo Li∗
+, Jian Yuan, Yong Li†
+Department of Electronic Engineering, BNRist, Tsinghua University
+Beijing China
+ABSTRACT
+Despite rapid advancements in large language models (LLMs), the token-level
+autoregressive nature constrains their complex reasoning capabilities. To en￾hance LLM reasoning, inference-time techniques, including Chain/Tree/Graph-of￾Thought(s), successfully improve the performance, as they are fairly cost-effective
+by guiding reasoning through external logical structures without modifying LLMs’
+parameters. However, these manually predefined, task-agnostic frameworks are
+applied uniformly across diverse tasks, lacking adaptability. To improve this,
+we propose RL-of-Thoughts (RLoT), where we train a lightweight navigator
+model with reinforcement learning (RL) to generate task-adaptive logical struc￾tures at inference time, enhancing LLM reasoning. Specifically, we design five
+basic logic blocks from the perspective of human cognition. During the rea￾soning process, the trained RL navigator dynamically selects the suitable logic
+blocks and combines them into task-specific logical structures according to prob￾lem characteristics. Experiments across multiple reasoning benchmarks (AIME,
+MATH, GPQA, etc.) with multiple LLMs (GPT, Llama, Qwen, and DeepSeek)
+illustrate that RLoT outperforms established inference-time techniques in most
+cases and improves up to 13.4% in challenging situations. Remarkably, with
+less than 3K parameters, our RL navigator is able to make sub-10B LLMs com￾parable to 100B-scale counterparts. Moreover, the RL navigator demonstrates
+strong transferability: a model trained on one specific LLM-task pair can ef￾fectively generalize to unseen LLMs and tasks. Our code is open-source at
+https://github.com/tsinghua-fib-lab/RL-LLM-Reasoning.
+1 INTRODUCTION
+Recent years have witnessed unprecedented advancements in large language models (LLMs), achiev￾ing remarkable success across diverse natural language tasks (Chang et al., 2024), including transla￾tion (Xu et al., 2024), semantic analysis (Lan et al., 2024b;a), and information retrieval (Hao et al.,
+2024). Despite these advancements, the inherent token-level autoregressive nature of LLMs poses a
+significant limitation for complex reasoning tasks (Zhao et al., 2023), such as solving mathematical
+problems (Ahn et al., 2024) or answering intricate questions (Zhuang et al., 2023). These tasks
+require sophisticated logical structures and long-term dependencies that go beyond the scope of
+simple sequential token prediction, leaving a considerable gap between current LLM capabilities and
+the demands of advanced reasoning applications.
+Plentiful research has been devoted to enhancing LLM reasoning. On one hand, fine-tuning ap￾proaches attain substantial improvements on pretrained LLMs (Zhong et al., 2024; DeepSeek-AI
+et al., 2025; Team et al., 2025). However, these methods demand massive computational resources
+and large-scale datasets, being costly to implement. On the other hand, inference-time techniques,
+exemplified by Chain-of-Thought (Wei et al., 2022), Tree-of-Thoughts (Yao et al., 2023), and Graph￾of-Thoughts (Besta et al., 2024), offer a lightweight alternative by enhancing reasoning through
+predefined external logical structures. While cost-effective, their logical structures rely on manual
+design and are task-agnostic, lacking the adaptability to diverse reasoning tasks.
+Addressing such limitations in inference-time techniques presents significant challenges. First,
+reasoning tasks span various domains, including mathematics, STEM, commonsense, etc., where
+1
+arXiv:2505.14140v3 [cs.AI] 27 Jan 2026
+Published as a conference paper at ICLR 2026
+tasks in each domain exhibit diverse characteristics, making it infeasible to manually design logical
+structures specified for each task. Second, complex reasoning tasks often require multiple steps,
+where the problem-solving status evolves after each step, requiring dynamic adjustments to the
+logical structure for subsequent reasoning. Therefore, predefined logical structures fail to adapt to the
+changes, limiting their effectiveness in stepwise reasoning tasks. These challenges highlight the need
+for more adaptive inference-time techniques to handle reasoning tasks with diversity and dynamics.
+Facing these challenges, we introduce RL-of-Thoughts (RLoT), a framework that leverages rein￾forcement learning (RL) at inference time to enhance the reasoning capabilities of LLMs. Specifically,
+we model long-sequence reasoning as a Markov Decision Process (MDP) and design five human
+cognition-inspired basic logical blocks as potential actions for decision-making. Within the MDP
+framework, we train an RL agent, namely the navigator model, to dynamically select and combine
+these blocks along the reasoning process, constructing task-specific logical structures and thereby
+enhancing the LLM’s ability to handle complex reasoning tasks. We conduct experiments across a
+wide range of reasoning benchmarks, including AIME (Olympic mathematics), MATH (elementary
+mathematics), GPQA (STEM), StrategyQA (commonsense), etc. The results demonstrate that our
+RLoT design outperforms various established inference-time techniques in most cases while being
+compatible with multiple well-known LLMs, such as GPT, Llama, Qwen, and DeepSeek. Remark￾ably, our RL navigator, which contains less than 3K parameters, is able to enhance the performance
+of sub-10B LLMs, making them comparable to much larger LLMs with 10× parameters. Moreover,
+the RL navigator exhibits strong transferability: a model trained with one specific LLM on one task
+domain can effectively generalize to unseen LLMs and tasks without fine-tuning.
+In summary, the main contributions of this work include:
+• We propose RL-of-Thoughts (RLoT), an inference-time technique that leverages RL to
+adaptively construct task-specific logical structures, enhancing LLM reasoning.
+• We conduct extensive experiments to verify the effectiveness of our method to improve
+LLM reasoning across various tasks. Compatible with multiple widely known LLMs, RLoT
+outperforms established inference-time techniques by up to 13.4%.
+• We demonstrate the transferability and efficiency of our method, where the trained navigator
+model can transfer across various LLMs and reasoning tasks. With < 3K parameters, it
+enhances multiple sub-10B LLMs to be comparable to 10× larger counterparts.
+2 PRELIMINARIES
+2.1 LARGE LANGUAGE MODELS (LLMS)
+Large language models (LLMs) are a class of advanced neural networks characterized by parameter
+scales up to billions, primarily trained through next-token prediction objectives. Given a sequence
+{w1, w2, ..., wt−1}, the models output wt to maximize the observation likelihood in the corpus as:
+T
+Y
+t=1
+P(wt|w1, w2, ..., wt−1). (1)
+Recent advancements in LLMs, exemplified by architectures like the GPT series (Brown et al., 2020;
+Kalyan, 2023; Achiam et al., 2023), the Llama family (Touvron et al., 2023; Dubey et al., 2024),
+etc, have demonstrated remarkable proficiency across diverse natural language understanding and
+generation tasks, including semantic parsing, cross-lingual translation (Zhao et al., 2023; Chang et al.,
+2024). Meanwhile, extensive researches integrate inference-time techniques like Chain-of-Thought
+(CoT) (Wei et al., 2022) and Tree-of-Thoughts (ToT) (Yao et al., 2023) to enhance the multi-step
+reasoning capability of LLMs. On the other hand, fine-tuning strategies leverage Outcome Reward
+Models (ORM) and Process Reward Models (PRM) to optimize the reasoning process through reward￾guided learning (Lightman et al., 2023; Wang et al., 2024c; Luo et al., 2024). These approaches
+address both structural limitations of auto-regressive decoding and the challenge of maintaining
+logical coherence in complex tasks (Xu et al., 2025).
+2
+Published as a conference paper at ICLR 2026
+2.2 MARKOV DECISION PROCESS (MDP)
+A Markov Decision Process (MDP) provides the core framework for sequential decision-making
+problems. An MDP is mathematically defined by the tuple (S, ρ, A, P, R), where S is the state space,
+and ρ ∈ ∆(S) represents the probability distribution over initial states, with ∆(S) being the set of all
+probability distributions over S. The action space is denoted by A. Given a specific action taken in a
+particular state, the state transition probability function P : S × A → ∆(S) and the reward function
+R : S × A → R define the likelihood of transitioning between states and the reward associated with
+each action. At each time step t, the agent chooses an action at ∈ A in state st ∈ S, receives a
+reward rt, and transitions to the next state st+1. The agent’s objective in an MDP is to maximize the
+total accumulated reward over time, which is the sum of the discounted rewards obtained at each step.
+The cumulative reward at time step t is expressed as Gt =
+P
+∞
+k=0 γ
+k
+rt+k, where γ is the discount
+factor that weighs the significance of future rewards.
+3 METHODS
+3.1 OVERVIEW
+State
+Selected action: 
+Decompose
+Score the current step in
+these aspects from 1 to 3...
+Correctness: 3
+Complexity remained: 1...
+Reasoning process
+Basic logic blocks
+...
+Self-evaluation state
+RL agent
+R(s,a)=80.5
+…
+1
+3
+Fetch 
+problem Step1: Debate StepN: Refine
+Reason one step
+ In this step,
+we calculate...
+ Reason
+exactly 1 step.
+Refine
+ We correct
+these mistakes...
+ Check the 
+current step.
+Terminate
+ The final 
+answer is...
+ Return the
+final answer.
+Decompose
+ Decompose the 
+problem into subtasks. 
+Subtask1... Subtask2... Subtask3...
+We summarize
+the subtasks below...
+?
+StepN+1
+PRM reward 
+Step1: A promising plan is ...
+...
+StepN: We fixed a mistake...
+StepN+1: We decompose the task...
+The score of step N+1 is 80.5...
+Reason one step
+Decompose
+Debate
+Plan3... Plan2... Plan1...
+We find that the 
+best plan is plan1...
+ Make different 
+plans for the task.
+Debate
+Refine
+Terminate
+Basic logic blocks (action space)
+Navigator
+Action space
+Legend
+Prompt LLM response
+Train & Inference Train only
+PRM response
+Trained module Frozen module
+Figure 1: Framework of RL-of-Thoughts (RLoT). We train an RL agent as the navigator, which
+dynamically selects and combines basic logic blocks along the reasoning process, constructing
+task-specific logical structures for each task and thereby enhancing the LLMs’ ability to handle
+complex reasoning tasks.
+In this paper, we propose to enhance LLM reasoning at inference time with RL, namely RL-of￾Thoughts (RLoT). The overall framework of RLoT is illustrated in Figure 1. Specifically, we first
+model long-sequence reasoning as a Markov Decision Process (MDP), where we design the action
+space, state space, and state transition mechanism, making the sequence of decisions within an
+episode correspond to the generation of a logical structure for reasoning (Section 3.2). Within this
+MDP framework, we train an RL agent, referred to as the navigator model, which conducts sequential
+decision-making to construct task-specific logical structures, thereby enhancing LLMs’ capability to
+address complex reasoning tasks (Section 3.3).
+3.2 LLM REASONING AS MDP
+To leverage the sequential decision-making capability of RL for adaptively designing logical structures
+at inference time based on problem characteristics, we first model long-sequence reasoning as a
+3
+Published as a conference paper at ICLR 2026
+specially designed MDP. Within this MDP, the sequence of decisions in an episode corresponds to
+the generation of a logical structure for reasoning. The designs of the state, action, reward, and state
+transition are as follows.
+State. The state space is designed to capture how the current solving status of the task is after steps of
+reasoning, thereby supporting dynamic adjustments to the logical structure for subsequent reasoning.
+We employ a self-evaluation mechanism to extract concise and informative states during the reasoning
+process. Specifically, we prompt the LLM itself to evaluate the current reasoning steps from three
+major and seven detailed aspects, which are listed in Table 1.
+Table 1: Aspects for state self-evaluation.
+Major A: Correctness B: Complexity C: Completeness
+Detailed
+A1: Correctness of modeling B1: Complexity to the final answer C1: Closeness to the final solution
+A2: Clarity for further reasoning B2: Alternative methods in
+further reasoning
+C2: Completeness within the step
+A3: Correctness of calculation
+For each detailed aspect, we require the LLM to assign a score from 1 to 3, which is then aggregated to
+form the state of the MDP. This approach summarizes complex reasoning steps into low-dimensional
+states, offering a comprehensive overview of the changing problem-solving status during the reasoning
+process, facilitating the RL agent in adjusting the strategy for subsequent reasoning accordingly.
+Please refer to detailed self-evaluation prompts in Appendix K.1.
+Action. When addressing difficult and complex problems, humans often employ specific cognitive
+strategies. For example, we break down complex tasks into smaller components and review previous
+steps when encountering anomalies in the solution. As evidenced by previous research, understand￾ing and applying these cognitive strategies can significantly enhance the reasoning capabilities of
+LLMs (Wu et al., 2024; Xue et al., 2024).
+With inspiration from human cognition, we design five “basic logic blocks” that can be flexibly
+combined, constituting the action space in our MDP. By selecting and cascading the blocks, the agent
+thereby constructs flexible logical structures, paving reasoning pathways from the initial problem to
+final solutions. In detail, the basic logic blocks include:
+• Reason one step: Perform reasoning for a single step of the current task, which may not
+directly lead to the final answer but contributes to the overall process.
+• Decompose: Break the current task into simpler subtasks and execute them sequentially.
+Then, we prompt the LLM to briefly summarize the results of these subtasks as the final
+result of this action.
+• Debate: Generate multiple plans or approaches for the task at hand and compare them to
+identify the most promising one. Then, we prompt the LLM to reason one step further based
+on the selected plan.
+• Refine: Review and revise the current reasoning step to improve clarity and correctness.
+• Terminate: Based on all the previous steps, provide the final answer to the original problem
+and show it in a specified format. This action marks the conclusion of the reasoning process.
+We illustrate the structures and detailed prompts for each blocks in Figure 1 and Appendix K.2.
+Reward. To evaluate the quality of the intermediate results after the agent selects an action during
+the long-sequence reasoning process, we employ the Process Reward Model (PRM) to score the
+intermediate results and set the PRM score of the intermediate result after each action as the single￾step reward for this action.
+State Transition. In our MDP design, the state transition is straightforward. During the reasoning
+process, executing a specific action based on the current problem-solving state is to prompt the LLM
+to continue reasoning using the logical structure corresponding to that action. After reasoning, the
+new problem-solving state is obtained through the aforementioned self-evaluation approach.
+Also, we impose a few simple restrictions on the state transition, ensuring the correctness and
+rationality of the constructed logical structures. First, once the answer is already presented in the
+4
+Published as a conference paper at ICLR 2026
+response after executing some action, no further actions are permitted except for “Terminate”. Second,
+the “Refine” action is automatically converted to “Reason one step” when it appears as the first action,
+as no refinement to the original problem is needed. Finally, to avoid the reasoning process being too
+long, we limit the maximum number of actions, and after reaching the limitation, the “Terminate”
+action will be automatically executed.
+3.3 TRAINING OF THE NAVIGATOR MODEL
+Within the MDP framework outlined above, given a specific LLM type and a kind of reasoning task,
+we train the navigator model. Under this formulation, the training process constitutes a standard RL
+problem within a discrete action space. Consequently, our framework is algorithm-agnostic, allowing
+for the employment of arbitrary off-the-shelf RL algorithms for training. To enhance the learning
+for challenging reasoning tasks, we extract hard questions from the training set of the target task,
+i.e., questions that the LLM cannot answer when directly prompted. Then, we use these problems
+for training the navigator model, from which we randomly select one in each episode and repeat it
+multiple times.
+We illustrate the training and inference pipeline of RLoT in Figure 1. During training, we hire
+PRM to provide reward signals. The parameters of both the PRM and the LLM are kept fixed from
+pre-trained models, and only parameters of the navigator model, i.e., the RL agent, are updated.
+This significantly reduces the computational cost, making the training process highly efficient. After
+training, the PRM model is no longer required, and the trained navigator model is used directly.
+Given an intermediate reasoning state, the navigator selects an action, which is then used to prompt
+the LLM to continue reasoning using the logical structure associated with the selected action. By
+repeating this, the navigator model is able to guide the LLM in solving challenging reasoning tasks
+with task-specific logical structures.
+4 EXPERIMENTS
+4.1 EXPERIMENTAL SETTINGS
+Reasoning Tasks. We conduct a comprehensive evaluation of our RLoT method across a wide range
+of reasoning tasks, encompassing benchmarks in mathematics, STEM, and commonsense question
+answering. For the mathematics domain, we adopt Olympic-level datasets, the AIME24 1
+and
+AMC23 2
+, as well as elementary math datasets GSM8K (Cobbe et al., 2021) and MATH (Hendrycks
+et al., 2021c). These are widely recognized as representative benchmarks. In the STEM tasks, we
+test on the MMLU-STEM (Hendrycks et al., 2021b;a) and GPQA (Rein et al., 2023) datasets, which
+span various STEM domains and a range of difficulty levels. To evaluate the commonsense reasoning
+ability, we employ the StrategyQA (Geva et al., 2021) benchmark, which presents challenging multi￾hop questions across diverse contexts. These benchmarks cover various domains, difficulties, and
+task types, forming a systematic evaluation of the reasoning ability.
+LLMs. Our RLoT framework is designed to be independent of specific LLMs, allowing it to be
+compatible with any off-the-shelf LLM. To evaluate this, we test our approach using four repre￾sentative LLMs: Qwen2.5-7B-Instruct, Qwen2.5-14B-Instruct (Yang et al., 2024a), Llama3.1-8B￾Instruct (Dubey et al., 2024), GPT-4o-mini (Hurst et al., 2024), and DeepSeek-R1-Distill-Qwen-
+7B (DeepSeek-AI et al., 2025). In this paper, we mainly focus on sub-10B LLMs, which are often
+constrained in handling complex reasoning tasks due to their relatively smaller size. We expect that
+our RLoT design can substantially enhance smaller LLMs by adaptively generating task-specific
+logical structures at inference time, thereby making their reasoning capabilities comparable to, or
+even exceeding, those of much larger LLMs. Without the need to modify the LLM’s parameters, this
+approach will be fairly computationally efficient. Note that we abandon the results of Llama3.1-8B￾Instruct on the Olympic-level datasets since the capability of this base LLM is too limited to solve
+these challenging problems.
+Baselines. We compare RLoT against various baselines designed to enhance LLM reasoning at
+inference time. First, we evaluate single-round question-answering techniques, including direct
+1
+https://huggingface.co/datasets/AI-MO/aimo-validation-aime
+2
+https://huggingface.co/datasets/AI-MO/aimo-validation-amc
+5
+Published as a conference paper at ICLR 2026
+question answering (Direct QA), zero-shot Chain-of-Thought (Zero-shot CoT), and few-shot Chain￾of-Thought (Few-shot CoT) (Wei et al., 2022). For Zero-shot CoT, we employ prompts with “Let’s
+think step by step”, and for Few-shot CoT, we include specific few-shot examples for each benchmark
+in the prompts as outlined in prior work (Yang et al., 2024b; Fu et al., 2023; Rein et al., 2023; Wei
+et al., 2022). Additionally, we consider multi-round techniques, including self-consistent Chain-of￾Thought (CoT-SC) (Wang et al., 2023) and Tree-of-Thoughts (ToT) (Yao et al., 2023). Following
+the original settings, we perform majority voting across four reasoning samples in CoT-SC, and
+we implement a logical tree with two layers and five nodes per layer in ToT. These multi-round
+approaches facilitate comparison and voting across diverse reasoning paths, thereby enhancing the
+reasoning capability of LLMs in complex tasks.
+4.2 TRAINING DETAILS
+In our implementation, the navigator model is a simple three-layer multilayer perceptron (MLP)
+with the Dueling Network architecture (Wang et al., 2016). The model merely contains 2,566
+parameters in total, where the lightweight design ensures efficient training and inference. We
+employ the Double-Dueling-DQN algorithm (Mnih et al., 2015; Van Hasselt et al., 2016; Wang et al.,
+2016) for optimization. By integrating Double Q-learning to mitigate value overestimation and the
+Dueling architecture to separate state and advantage representations, this algorithm significantly
+improves stability during the training process. We train the navigator model for 3,000 episodes with
+Qwen2.5-14B-Instruct on the MATH benchmark, where the learning curves presented in Figure 2
+and Appendix A.1 indicate strong convergence. Furthermore, in Appendix A.2, we investigate the
+impact of employing alternative RL algorithms and extending training episodes, where the results
+consistently demonstrate similar convergence.
+Figure 2: Learning curves during RL training of navigator models.
+To obtain reward signals for actions, we utilize the Math-Shepherd as the PRM (Wang et al., 2024c).
+This model is trained by previous researchers using automatically constructed process-wise su￾pervision data, reducing heavy reliance on manual annotation and thereby achieving remarkable
+performance. For reproducibility, please refer to more detailed settings and the illustration of the
+whole pipeline in Appendix J.
+4.3 OVERALL PERFORMANCE
+We use the obtained navigator model to enhance the reasoning of multiple LLMs across different
+reasoning tasks. Following existing works like CoT-SC, we perform multiple repeated inferences
+for each task and filter out the trails that do not meet self-consistency, enhancing the robustness of
+reasoning, where the results are presented in Table 2. For the baseline performance, we prioritize
+using the results reported in the official technical reports of each LLM (Yang et al., 2024a; Dubey
+et al., 2024; Hurst et al., 2024), if available. Otherwise, we evaluate the performance through our
+own experiments following the settings established in previous works (Fu et al., 2023; Yang et al.,
+2024b; Yao et al., 2023).
+The results show that our method performs well, consistently outperforming the established inference￾time baselines across almost all reasoning tasks when combined with various LLMs. Notably, our
+6
+Published as a conference paper at ICLR 2026
+Table 2: Overall evaluation of RLoT’s capability to enhance multiple LLMs’ reasoning across
+different tasks. The bold numbers indicate the best performance in each group of experiments, and
+the underlined numbers indicate the best baseline method.
+LLM Method Olympic math Elementary math STEM Commonsense Average
+AIME24 AMC23 MATH GSM8K GPQA MMLU-STEM StrategyQA
+Qwen2.5-14B-Instruct
+Direct QA 13.33 57.50 78.62 93.93 36.60 85.38 72.34 62.53
+Zero-shot CoT 16.67 62.50 78.56 94.23 38.39 85.63 75.98 64.57
+Few-shot CoT 6.67 55.00 80.00 94.80 45.50 85.06 78.60 63.66
+CoT-SC 6.67 47.50 80.04 94.08 45.54 86.71 80.06 62.94
+ToT 10.00 55.00 79.50 93.78 45.08 86.55 78.17 64.01
+RLoT (ours) 23.33 65.00 80.38 94.16 51.34 88.93 81.22 69.19
+Qwen2.5-7B-Instruct
+Direct QA 10.00 42.50 74.64 91.58 31.25 80.94 68.85 57.11
+Zero-shot CoT 16.67 55.00 74.86 91.58 34.15 81.00 71.17 60.63
+Few-shot CoT 13.33 45.00 75.50 91.60 36.40 81.16 74.38 59.62
+CoT-SC 6.67 50.00 76.36 92.12 38.84 83.25 78.45 60.81
+ToT 13.33 50.00 73.80 91.35 36.60 82.62 70.45 59.74
+RLoT (ours) 23.33 60.00 76.70 92.87 44.64 85.06 79.04 65.95
+Llama3.1-8B-Instruct
+Direct QA
+–
+49.12 84.83 32.14 71.58 70.74 61.68
+Zero-shot CoT 49.74 85.37 32.80 72.85 73.07 62.77
+Few-shot CoT 48.52 84.50 33.03 70.66 72.05 61.75
+CoT-SC 51.74 87.04 33.48 73.29 78.89 64.89
+ToT 51.93 86.80 32.24 74.72 71.47 63.43
+RLoT (ours) 56.56 90.07 46.88 80.56 84.42 71.70
+GPT-4o-mini
+Direct QA 13.33 55.00 76.58 93.33 43.08 85.70 77.00 61.17
+Zero-shot CoT 6.67 67.50 76.76 93.93 40.20 85.76 78.17 64.14
+Few-shot CoT 6.67 57.50 75.46 93.48 35.94 85.82 80.06 62.13
+CoT-SC 6.67 45.00 76.84 93.63 46.42 86.55 82.53 62.52
+ToT 6.67 50.00 74.30 93.33 44.42 85.92 76.42 61.58
+RLoT (ours) 20.00 70.00 77.36 93.86 54.02 88.23 82.68 69.45
+DeepSeek-R1-
+Distill-Qwen-7B
+Direct QA 46.67 60.00 92.27 95.74 54.47 83.61 79.48 73.18
+Zero-shot CoT 53.33 62.50 91.48 95.20 53.13 85.28 78.89 74.26
+Few-shot CoT 56.67 67.50 92.54 94.38 56.47 87.47 79.33 76.34
+CoT-SC 56.67 67.50 95.54 96.13 60.94 89.03 82.82 78.38
+ToT 50.00 55.00 95.18 94.54 55.13 86.55 80.91 73.90
+RLoT (ours) 63.33 77.50 96.56 98.94 67.19 90.77 86.17 82.92
+approach brings about substantial improvements in the GPQA benchmark, which is a challenging task
+where LLMs generally perform poorly. Specifically, when implemented with Llama3.1-8B-Instruct,
+we achieve a 13.4% performance boost. Among the baselines, CoT-SC performs the best across most
+tasks. Meanwhile, we find that despite being more complex in design, ToT performs poorly on many
+reasoning tasks, which is also reported in previous studies (Wu et al., 2024; Zhang et al., 2024a;
+Qi et al., 2024). Furthermore, we report the computational overhead and implementation latency
+of RLoT in Appendix C, and also compare RLoT with more recently proposed test-time scaling
+baselines in Appendix E. By directly generate specific logical structures for each question without
+requiring search-and-trial, our method reached the best performance while maintain a low cost.
+4.4 PARAMETER SIZE EFFICIENCY
+In this section, we demonstrate the parameter size efficiency of our RLoT method in enhancing the
+reasoning capability of sub-10B LLMs, making them comparable to LLMs with several times more
+parameters. Specifically, we select three 10B LLMs, including Qwen2.5-14B-Instruct, Llama3.1-8B￾Instruct, and GPT-4o-mini, and their respective large-scale counterparts. It is worth noting that the
+parameter size of GPT-4o series models was estimated in previous studies (Abacha et al., 2024).
+In Appendix D, we present the performance of these models across various reasoning tasks using
+Few-shot CoT, which is the standard technique commonly used in official technical reports (Yang
+et al., 2024a; Dubey et al., 2024; Hurst et al., 2024) and previous studies (Liu et al., 2024; ret, 2024;
+Tran et al., 2024; Kumar et al., 2024; Yu et al., 2024) in evaluation of LLMs. We also show the
+performance of the 10B LLMs after enhancement with RLoT. The results indicate that our RL-based
+navigator, which contains fewer than 3,000 parameters, significantly enhances the performance
+of sub-10B LLMs, making them comparable to much larger counterparts with around 10× more
+parameters. Specifically, RLoT empowers the sub-10B LLMs to be comparable to, compensating
+most of the performance gap, or even surpassing their larger counterparts, demonstrating its efficiency.
+7
+Published as a conference paper at ICLR 2026
+4.5 TRANSFERABILITY
+To better illustrate the transferability of our navigator model, we conduct further experiments regarding
+transferring across different LLMs and reasoning tasks, respectively.
+Transfer across Different LLMs. To verify the transferability of RLoT across different LLMs,
+we respectively train navigator models with three different LLMs, namely Qwen2.5-14B-Instruct,
+Llama3.1-8B-Instruct, and GPT-4o-mini, on the MATH benchmark. Without any fine-tuning, we
+cross-test the obtained navigator models to enhance other LLMs on the MATH benchmark and
+present the results in Table 3.
+The results indicate that the trained navigator model exhibits strong transferability across different
+LLMs. When implementing the navigator model to enhance the reasoning capabilities of a specific
+LLM, we find that, regardless of whether the navigator model is trained on the same LLM or a
+different one, its performance remains consistent. In all cases, the enhanced LLM outperforms the
+best well-known inference-time baseline.
+Table 3: Evaluation of RLoT’s transferability across different LLMs. We train navigator models with
+three different LLMs on the MATH benchmark and cross-test the obtained navigator models with
+other LLMs. We also list CoT-SC, the best baseline method, for comparison.
+Method Train Test
+Qwen2.5-14B-Instruct
+@MATH
+Llama3.1-8B-Instruct
+@MATH
+GPT-4o-mini
+@MATH
+RLoT (ours)
+Qwen2.5-14B-Instruct@MATH 80.38 56.56 77.36
+Llama3.1-8B-Instruct@MATH 81.48 53.60 78.14
+GPT-4o-mini@MATH 80.84 56.94 78.08
+CoT-SC – 80.04 51.74 76.84
+Transfer across Different Reasoning Tasks. To verify the transferability of RLoT across different
+reasoning tasks, we respectively train navigator models with Qwen2.5-14B-Instruct on three different
+benchmarks, namely MATH, GPQA, and StrategyQA. Without any fine-tuning, We cross-test the
+obtained navigator models to enhance the reasoning capabilities of Qwen2.5-14B-Instruct on the
+other tasks and present the results in Table 4.
+The results indicate that the trained navigator model owns strong transferability across different
+reasoning tasks. When utilizing the navigator model to enhance the reasoning capabilities of LLMs
+for a specific task, we observe that, regardless of whether the navigator model is trained on the same
+task or a different one, its performance remains largely consistent. In most cases, it surpasses the
+best-performing inference-time baseline.
+Furthermore, we find that the navigator models trained on mathematical (MATH) and STEM (GPQA)
+problems exhibit better transferability to each other. However, the transferability between the
+navigator trained on commonsense problems (StrategyQA) and the former two is relatively limited,
+which is intuitive given the inherent relations and differences between domains of mathematics,
+STEM, and commonsense reasoning.
+Table 4: Evaluation of RLoT’s transferability across different tasks. We train navigator models with
+Qwen2.5-14B-Instruct on three different tasks and cross-test the obtained navigator models on other
+tasks. We also list CoT-SC, the best baseline method, for comparison.
+Method Train Test
+Qwen2.5-14B-Instruct
+@MATH
+Qwen2.5-14B-Instruct
+@GPQA
+Qwen2.5-14B-Instruct
+@StrategyQA
+RLoT (ours)
+Qwen2.5-14B-Instruct@MATH 80.38 51.34 81.22
+Qwen2.5-14B-Instruct@GPQA 80.76 53.57 80.64
+Qwen2.5-14B-Instruct@StrategyQA 79.94 50.22 81.37
+CoT-SC – 80.04 45.54 80.06
+8
+Published as a conference paper at ICLR 2026
+Table 5: Typical patterns in the task-specific logical structures generated by RLoT (“Reason” is short
+for “Reason one step”).
+Task MATH GPQA StrategyQA
+Instance number 5000 448 687
+Major 2-step pattern Reason-Refine Reason-Refine Reason-Debate
+Reason-Decompose Reason-Debate Reason-Refine
+Major 3-step pattern Decompose-Refine-Reason Reason-Refine-Debate Reason-Decompose-Debate
+Reason-Refine-Debate Reason-Decompose-Refine Reason-Refine-Debate
+4.6 TYPICAL REASONING PATTERNS
+The experimental results above have demonstrated RLoT’s capability to enhance LLM reasoning
+with task-specific logical structures. In Table 5, we summarize typical patterns observed in the
+logical structures generated by RLoT when solving tasks from the MATH, GPQA, and StrategyQA
+benchmarks using Qwen2.5-14B-Instruct.
+From the 2-step patterns, we observe that the Reason-Refine mode emerges frequently. Particularly
+in MATH and GPQA, which require massive mathematical calculations, this pattern compensates
+for the LLMs’ relatively poor calculation abilities, leading to more reliable results. In the 3-step
+patterns, operations like Decompose and Debate are frequently employed, which help break down
+challenging problems or facilitate discussions to explore potential solutions. Additionally, the Refine
+operation is often used before and after the Decompose and Debate steps, ensuring correct integration
+with preceding and succeeding reasoning processes. These typical reasoning patterns exhibit strong
+interpretability, further validating the capability of RLoT to generate task-specific logical structures
+that enhance LLM reasoning. For better understanding, we provide an example in Appendix B.1 to
+illustrate how these logical structures empower the correct solution to a problem.
+4.7 ABLATION STUDIES, ANALYSES, AND DISCUSSIONS
+To better justify our designs, we verify the effectiveness of our logic block designs with ablation
+studies. To examine the impact of each block, we remove each of them and train a navigator, where
+results in Table 6 confirm that all blocks are effective.
+Table 6: Ablation study results for each logic block.
+LLM Ablation MATH GPQA StrategyQA Average
+Qwen2.5-Instruct-7B
+w/o Decompose 75.42 31.92 77.00 61.45
+w/o Debate 74.02 36.61 77.58 62.74
+w/o Refine 75.76 41.29 72.93 63.33
+Full RLoT 76.70 44.64 79.04 66.79
+GPT-4o-mini
+w/o Decompose 76.08 41.74 79.33 65.72
+w/o Debate 74.68 45.31 78.75 66.25
+w/o Refine 76.44 51.56 74.38 67.46
+Full RLoT 77.36 54.02 82.68 71.35
+Also, we conducted a series of analyses, and discussions. We quantify the contribution of each logic
+block in Appendix I. We discuss the reliability of the self-evaluation state design in Appendix F. We
+analyze the necessity of employing RL to train the navigator model in Appendix G. We illustrate the
+role of the process reward model (PRM) in training the navigator in Appendix H.
+9
+Published as a conference paper at ICLR 2026
+5 RELATED WORKS
+5.1 INFERENCE-TIME REASONING OF LLMS
+To improve LLMs’ reasoning capability, plentiful research has investigated inference-time techniques
+without the need for model updates. On the one hand, predefined external logical structures are widely
+applied as basic solutions. Most notably, Chain-of-Thought (CoT) (Wei et al., 2022) incorporates
+intermediate reasoning steps within the prompt, enhancing the model’s abilities in complex tasks. As
+a subsequent advancement, CoT with Self-Consistency (CoT-SC) (Wang et al., 2023) further refines
+CoT by generating multiple reasoning chains and filtering out those that do not meet self-consistency,
+thus increasing the reliability. Moreover, the concept of Tree-of-Thoughts (ToT) (Yao et al., 2023)
+and Graph-of-Thoughts (GoT) (Besta et al., 2024) has been introduced, where the reasoning process
+is represented as a graph, enabling exploration and backtracking from more promising outcomes.
+Despite their success, these methods rely on task-agnostic logical structures that are applied uniformly
+across diverse tasks, lacking flexibility.
+On the other hand, recent researchers have proposed more adaptive inference-time approaches. From
+hiring the decompose-analyze-rethink procedure (Xue et al., 2024) to utilizing Monte Carlo Tree
+Search to discover more effective logical structures (Wu et al., 2024; Wang et al., 2024a), these
+approaches dynamically compose appropriate logical structures for specific tasks to enhance the
+reasoning performance. However, the search-and-trail design incurs massive extra computational
+cost, limiting the efficiency of reasoning. In contrast, the proposed RLoT method employs RL to
+train a navigator agent. With the trained navigator, our design can directly select and combine basic
+logic blocks and generate task-specific logical structures, enabling more adaptive reasoning while
+eliminating the searching cost.
+5.2 RL AND LLMS
+RL has become vital in the development of LLMs (Xu et al., 2025; Hao et al., 2025). One important
+direction is aligning LLMs with human preferences, where the key method is Reinforcement Learning
+from Human Feedback (RLHF) (Christiano et al., 2017; Ouyang et al., 2022). In RLHF, LLMs are
+fine-tuned as actors in RL based on feedback derived from human preferences. Recently, extensive
+helpful and harmless LLMs have been created using RLHF (Bai et al., 2022; Casper et al., 2023).
+Beyond this, RL is also applied to enhance the reasoning capability of LLMs. In this context, reward
+signals are derived from Outcome Reward Models (ORM) (Kazemnejad et al., 2024) or Process
+Reward Models (PRM) (Lightman et al., 2023; Wang et al., 2024c; Luo et al., 2024), providing
+feedbacks for the LLMs’ reasoning process during fine-tuning. By applying RL to LLMs with these
+rewards, LLMs can iteratively improve their performance in multi-step reasoning tasks (Havrilla
+et al., 2024a;b; Shao et al., 2024; DeepSeek-AI et al., 2025).
+In summary, existing RL techniques have significantly enhanced LLMs’ capabilities by updating
+model parameters, yet such fine-tuning demands substantial computational resources when applied
+to each pre-trained LLM. In this paper, the proposed RLoT method applies RL at inference time,
+leveraging the power of RL to train a lightweight navigator rather than the entire parameters of LLMs,
+our method achieves low cost and wide compatibility with various pre-trained LLMs.
+6 CONCLUSIONS
+In this paper, we propose RL-of-Thoughts (RLoT), an inference-time technique that utilizes RL to
+train a navigator model, which adaptively constructs task-specific logical structures, and thereby
+enhances the reasoning capabilities of LLMs. Through extensive experiments across various bench￾marks, we demonstrate the effectiveness of our method in improving the reasoning capability of
+various widely known LLMs. Additionally, we show the strong transferability and efficiency of
+our approach, where the trained navigator model can effectively transfer across different LLMs
+and unseen reasoning tasks. With fewer than 3K parameters, our navigator model enables multiple
+sub-10B LLMs to attain performance comparable to larger LLMs with up to 10 times the parameter
+size. Our work highlights the potential of RL at inference time in enhancing the reasoning capabilities
+of LLMs, paving the way for more adaptive and efficient LLM reasoning in the future.
+10
